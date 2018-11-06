@@ -129,7 +129,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     // Track enough information about the current membership state to be able to determine which requests via the API
     // and the from other nodes are safe to process
-    private boolean rebalanceResolved;
+    private volatile boolean rebalanceResolved;
     private ConnectProtocol.Assignment assignment;
     private boolean canReadConfigs;
     private ClusterConfigState configState;
@@ -777,6 +777,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         if (needsRejoin) {
             member.requestRejoin();
+            log.info("[CHIA] needsRejoin");
             return false;
         }
 
@@ -794,6 +795,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // what work is currently active and running. If we bail early, the main tick loop + having requested rejoin
         // guarantees we'll attempt to rejoin before executing this method again.
         herderMetrics.rebalanceSucceeded(time.milliseconds());
+        log.info("[CHIA] set rebalanceResolved to true");
         rebalanceResolved = true;
         return true;
     }
@@ -1189,7 +1191,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             // catch up (or backoff if we fail) not executed in a callback, and so we'll be able to invoke other
             // group membership actions (e.g., we may need to explicitly leave the group if we cannot handle the
             // assigned tasks).
-            log.info("Joined group and got assignment: {}", assignment);
+            log.info("[CHIA] Joined group and got assignment: {}", assignment);
             synchronized (DistributedHerder.this) {
                 DistributedHerder.this.assignment = assignment;
                 DistributedHerder.this.generation = generation;
@@ -1211,7 +1213,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         @Override
         public void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
-            log.info("Rebalance started");
+            log.info("Rebalance started:" + rebalanceResolved);
 
             // Note that since we don't reset the assignment, we we don't revoke leadership here. During a rebalance,
             // it is still important to have a leader that can write configs, offsets, etc.

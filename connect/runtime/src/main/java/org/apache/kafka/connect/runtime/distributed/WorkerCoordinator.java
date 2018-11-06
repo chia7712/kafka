@@ -275,7 +275,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     @Override
     protected void onJoinPrepare(int generation, String memberId) {
         this.leaderState = null;
-        log.debug("Revoking previous assignment {}", assignmentSnapshot);
+        log.info("Revoking previous assignment {}", assignmentSnapshot);
         if (assignmentSnapshot != null && !assignmentSnapshot.failed())
             listener.onRevoked(assignmentSnapshot.leader(), assignmentSnapshot.connectors(), assignmentSnapshot.tasks());
     }
