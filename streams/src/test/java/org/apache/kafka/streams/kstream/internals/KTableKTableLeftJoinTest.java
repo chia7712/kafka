@@ -351,7 +351,7 @@ public class KTableKTableLeftJoinTest {
             };
 
             final Random random = new Random();
-            for (int i = 0; i < 1000; i++) {
+            for (int i = 0; i < 100; i++) {
                 for (final String input : inputs) {
                     final Long key = (long) random.nextInt(1000);
                     final String value = values[random.nextInt(values.length)];

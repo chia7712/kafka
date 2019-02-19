@@ -405,7 +405,9 @@ public class TopologyTestDriver implements Closeable {
             // Process the record ...
             task.process();
             task.maybePunctuateStreamTime();
+            final long start = System.currentTimeMillis();
             task.commit();
+            System.out.println("[CHIA] commit. elapsed:" + (System.currentTimeMillis() - start));
             captureOutputRecords();
         } else {
             final TopicPartition globalTopicPartition = globalPartitionsByTopic.get(topicName);

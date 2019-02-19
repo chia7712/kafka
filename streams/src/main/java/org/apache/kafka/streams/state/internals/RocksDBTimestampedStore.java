@@ -215,8 +215,10 @@ public class RocksDBTimestampedStore extends RocksDBStore {
 
         @Override
         public void flush() throws RocksDBException {
+            final long start = System.currentTimeMillis();
             db.flush(fOptions, oldColumnFamily);
             db.flush(fOptions, newColumnFamily);
+            System.out.println("[CHIA] DualColumnFamilyAccessor flush. elapsed:" + (System.currentTimeMillis() - start));
         }
 
         @Override
