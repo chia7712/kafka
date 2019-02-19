@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -960,9 +961,17 @@ public class InternalTopologyBuilder {
                         final String changelogTopic = ProcessorStateManager.storeChangelogTopic(applicationId, stateStoreName);
                         storeToChangelogTopic.put(stateStoreName, changelogTopic);
                     }
-                    stateStoreMap.put(stateStoreName, stateStoreFactory.build());
+                    final StateStore store = stateStoreFactory.build();
+                    StateStore trueStore = store;
+                    while (trueStore instanceof WrappedStateStore) {
+                        trueStore = ((WrappedStateStore) trueStore).wrapped();
+                    }
+                    System.out.println("[CHIA] add state store:" + trueStore.getClass().getName());
+                    stateStoreMap.put(stateStoreName, store);
                 } else {
-                    stateStoreMap.put(stateStoreName, globalStateStores.get(stateStoreName));
+                    final StateStore store = globalStateStores.get(stateStoreName);
+                    System.out.println("[CHIA] add global state store:" + store.getClass().getName());
+                    stateStoreMap.put(stateStoreName, store);
                 }
             }
         }

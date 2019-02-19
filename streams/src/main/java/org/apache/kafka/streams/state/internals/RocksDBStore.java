@@ -130,7 +130,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         userSpecifiedOptions.setMaxWriteBufferNumber(MAX_WRITE_BUFFERS);
         userSpecifiedOptions.setCreateIfMissing(true);
         userSpecifiedOptions.setErrorIfExists(false);
-        userSpecifiedOptions.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
+        userSpecifiedOptions.setInfoLogLevel(InfoLogLevel.INFO_LEVEL);
         // this is the recommended way to increase parallelism in RocksDb
         // note that the current implementation of setIncreaseParallelism affects the number
         // of compaction threads but not flush threads (the latter remains one). Also

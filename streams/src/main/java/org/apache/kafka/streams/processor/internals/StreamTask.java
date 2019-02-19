@@ -486,8 +486,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     @Override
     protected void flushState() {
+        final long start = System.currentTimeMillis();
         log.trace("Flushing state and producer");
         super.flushState();
+        System.out.println("[CHIA] flushState elapsed:" + (System.currentTimeMillis() - start));
         try {
             recordCollector.flush();
         } catch (final ProducerFencedException fatal) {
