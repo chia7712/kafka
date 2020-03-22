@@ -92,19 +92,25 @@ private[log] object LogValidator extends Logging {
                                                     origin: AppendOrigin,
                                                     interBrokerProtocolVersion: ApiVersion,
                                                     brokerTopicStats: BrokerTopicStats): ValidationAndOffsetAssignResult = {
-    if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
-      // check the magic value
-      if (!records.hasMatchingMagic(magic))
-        convertAndAssignOffsetsNonCompressed(records, topicPartition, offsetCounter, compactedTopic, time, now, timestampType,
-          timestampDiffMaxMs, magic, partitionLeaderEpoch, origin, brokerTopicStats)
-      else
+    var pass = false
+    println(s"[CHIA] validateMessagesAndAssignOffsets")
+    try {
+      val r = if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
+        // check the magic value
+        if (!records.hasMatchingMagic(magic))
+          convertAndAssignOffsetsNonCompressed(records, topicPartition, offsetCounter, compactedTopic, time, now, timestampType,
+            timestampDiffMaxMs, magic, partitionLeaderEpoch, origin, brokerTopicStats)
+        else
         // Do in-place validation, offset assignment and maybe set timestamp
-        assignOffsetsNonCompressed(records, topicPartition, offsetCounter, now, compactedTopic, timestampType, timestampDiffMaxMs,
-          partitionLeaderEpoch, origin, magic, brokerTopicStats)
-    } else {
-      validateMessagesAndAssignOffsetsCompressed(records, topicPartition, offsetCounter, time, now, sourceCodec, targetCodec, compactedTopic,
-        magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, origin, interBrokerProtocolVersion, brokerTopicStats)
-    }
+          assignOffsetsNonCompressed(records, topicPartition, offsetCounter, now, compactedTopic, timestampType, timestampDiffMaxMs,
+            partitionLeaderEpoch, origin, magic, brokerTopicStats)
+      } else {
+        validateMessagesAndAssignOffsetsCompressed(records, topicPartition, offsetCounter, time, now, sourceCodec, targetCodec, compactedTopic,
+          magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, origin, interBrokerProtocolVersion, brokerTopicStats)
+      }
+      pass = true
+      r
+    } finally println(s"[CHIA] validateMessagesAndAssignOffsets pass:$pass")
   }
 
   private def getFirstBatchAndMaybeValidateNoMoreBatches(records: MemoryRecords, sourceCodec: CompressionCodec): RecordBatch = {

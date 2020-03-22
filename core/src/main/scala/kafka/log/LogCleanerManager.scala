@@ -177,9 +177,12 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           inProgress.contains(topicPartition) || isUncleanablePartition(log, topicPartition)
       }.map {
         case (topicPartition, log) => // create a LogToClean instance for each
+          var pass = false
+          println(s"[CHIA] grabFilthiestCompactedLog")
           try {
             val lastCleanOffset = lastClean.get(topicPartition)
             val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
+            pass = true
             // update checkpoint for logs with invalid checkpointed offsets
             if (offsetsToClean.forceUpdateCheckpoint)
               updateCheckpoints(log.dir.getParentFile(), Option(topicPartition, offsetsToClean.firstDirtyOffset))
@@ -190,7 +193,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           } catch {
             case e: Throwable => throw new LogCleaningException(log,
               s"Failed to calculate log cleaning stats for partition $topicPartition", e)
-          }
+          } finally println(s"[CHIA] grabFilthiestCompactedLog pass:$pass")
       }.filter(ltc => ltc.totalBytes > 0) // skip any empty logs
 
       this.dirtiestLogCleanableRatio = if (dirtyLogs.nonEmpty) dirtyLogs.max.cleanableRatio else 0

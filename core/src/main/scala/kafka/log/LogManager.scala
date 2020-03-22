@@ -614,20 +614,25 @@ class LogManager(logDirs: Seq[File],
    * Checkpoint log start offset for all logs in provided directory.
    */
   private def checkpointLogStartOffsetsInDir(dir: File): Unit = {
-    for {
-      partitionToLog <- logsByDir.get(dir.getAbsolutePath)
-      checkpoint <- logStartOffsetCheckpoints.get(dir)
-    } {
-      try {
-        val logStartOffsets = partitionToLog.collect {
-          case (k, log) if log.logStartOffset > log.logSegments.head.baseOffset => k -> log.logStartOffset
+    println(s"[CHIA] checkpointLogStartOffsetsInDir dir:$dir")
+    var pass = false
+    try {
+      for {
+        partitionToLog <- logsByDir.get(dir.getAbsolutePath)
+        checkpoint <- logStartOffsetCheckpoints.get(dir)
+      } {
+        try {
+          val logStartOffsets = partitionToLog.collect {
+            case (k, log) if log.logStartOffset > log.logSegments.head.baseOffset => k -> log.logStartOffset
+          }
+          checkpoint.write(logStartOffsets)
+        } catch {
+          case e: IOException =>
+            logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while writing to logStartOffset file in directory $dir", e)
         }
-        checkpoint.write(logStartOffsets)
-      } catch {
-        case e: IOException =>
-          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while writing to logStartOffset file in directory $dir", e)
       }
-    }
+      pass = true
+    } finally println(s"[CHIA] checkpointLogStartOffsetsInDir dir:$dir pass:$pass")
   }
 
   // The logDir should be an absolute path
