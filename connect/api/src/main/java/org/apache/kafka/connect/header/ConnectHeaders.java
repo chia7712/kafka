@@ -29,6 +29,7 @@ import org.apache.kafka.connect.errors.DataException;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -46,9 +47,13 @@ public class ConnectHeaders implements Headers {
 
     private static final int EMPTY_HASH = Objects.hash(new LinkedList<>());
 
-    private LinkedList<Header> headers;
+    private List<Header> headers;
 
     public ConnectHeaders() {
+    }
+
+    public ConnectHeaders(int initialCapacity) {
+        headers = new ArrayList<>(initialCapacity);
     }
 
     public ConnectHeaders(Iterable<Header> original) {
