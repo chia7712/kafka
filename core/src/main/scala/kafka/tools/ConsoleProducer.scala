@@ -66,9 +66,10 @@ object ConsoleProducer {
   private def send(producer: KafkaProducer[Array[Byte], Array[Byte]],
                          record: ProducerRecord[Array[Byte], Array[Byte]], sync: Boolean): Unit = {
     if (sync)
-      producer.send(record).get()
-    else
-      producer.send(record, new ErrorLoggingCallback(record.topic, record.key, record.value, false))
+      producer.produce(record).toCompletableFuture.get()
+    else {
+      producer.produce(record).whenComplete(new ErrorLoggingCallback(record.topic, record.key, record.value, false))
+    }
   }
 
   def getReaderProps(config: ProducerConfig): Properties = {

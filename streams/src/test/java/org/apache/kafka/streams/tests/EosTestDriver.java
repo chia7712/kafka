@@ -107,22 +107,23 @@ public class EosTestDriver extends SmokeTestUtil {
 
                     final ProducerRecord<String, Integer> record = new ProducerRecord<>("data", key, value);
 
-                    producer.send(record, (metadata, exception) -> {
-                        if (exception != null) {
-                            exception.printStackTrace(System.err);
-                            System.err.flush();
-                            if (exception instanceof TimeoutException) {
-                                try {
-                                    // message == org.apache.kafka.common.errors.TimeoutException: Expiring 4 record(s) for data-0: 30004 ms has passed since last attempt plus backoff time
-                                    final int expired = Integer.parseInt(exception.getMessage().split(" ")[2]);
-                                    updateNumRecordsProduces(-expired);
-                                } catch (final Exception ignore) {
+                    producer.produce(record)
+                        .whenComplete((metadata, exception) -> {
+                            if (exception != null) {
+                                exception.printStackTrace(System.err);
+                                System.err.flush();
+                                if (exception instanceof TimeoutException) {
+                                    try {
+                                        // message == org.apache.kafka.common.errors.TimeoutException: Expiring 4 record(s) for data-0: 30004 ms has passed since last attempt plus backoff time
+                                        final int expired = Integer.parseInt(exception.getMessage().split(" ")[2]);
+                                        updateNumRecordsProduces(-expired);
+                                    } catch (final Exception ignore) {
+                                    }
                                 }
+                            } else {
+                                offsets.getOrDefault(metadata.partition(), new LinkedList<>()).add(metadata.offset());
                             }
-                        } else {
-                            offsets.getOrDefault(metadata.partition(), new LinkedList<>()).add(metadata.offset());
-                        }
-                    });
+                        });
 
                     updateNumRecordsProduces(1);
                     if (numRecordsProduced % 1000 == 0) {

@@ -1281,7 +1281,7 @@ public class QueryableStateIntegrationTest {
 
                 while (getCurrIteration() < numIterations && !shutdown) {
                     for (final String value : inputValues) {
-                        producer.send(new ProducerRecord<>(topic, value));
+                        producer.produce(new ProducerRecord<>(topic, value));
                     }
                     incrementIteration();
                 }

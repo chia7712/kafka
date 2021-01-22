@@ -82,7 +82,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -768,6 +769,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.
      * See {@link #send(ProducerRecord, Callback)} for details.
      */
+    @Deprecated
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record) {
         return send(record, null);
@@ -878,6 +880,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
      * @throws KafkaException If a Kafka related error occurs that does not belong to the public API exceptions.
      */
+    @Deprecated
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         // intercept the record, which can be potentially modified; this method does not throw exceptions
@@ -893,9 +896,99 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * Asynchronously send a record to a topic and complete the CompletionStage when the send has been acknowledged.
+     * <p>
+     * The send is asynchronous and this method will return immediately once the record has been stored in the buffer of
+     * records waiting to be sent. This allows sending many records in parallel without blocking to wait for the
+     * response after each one.
+     * <p>
+     * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
+     * it was assigned and the timestamp of the record. If
+     * {@link org.apache.kafka.common.record.TimestampType#CREATE_TIME CreateTime} is used by the topic, the timestamp
+     * will be the user provided timestamp or the record send time if the user did not specify a timestamp for the
+     * record. If {@link org.apache.kafka.common.record.TimestampType#LOG_APPEND_TIME LogAppendTime} is used for the
+     * topic, the timestamp will be the Kafka broker local time when the message is appended.
+     * <p>
+     * Since the send call is asynchronous it returns a {@link CompletionStage} for the
+     * {@link RecordMetadata} that will be assigned to this record.
+     * <p>
+     *
+     * <pre>
+     * {@code
+     * byte[] key = "key".getBytes();
+     * byte[] value = "value".getBytes();
+     * ProducerRecord<byte[],byte[]> record = new ProducerRecord<byte[],byte[]>("my-topic", key, value)
+     * producer.produce(record).toCompletableFuture().get();
+     * }</pre>
+     * <p>
+     *
+     * <pre>
+     * {@code
+     * ProducerRecord<byte[],byte[]> record = new ProducerRecord<byte[],byte[]>("the-topic", key, value);
+     * producer.produce(myRecord)
+     *  .whenComplete((recordMetadata, e) -> {
+     *    if (e != null) e.printStackTrace();
+     *    else System.out.println("The offset of the record we just sent is: " + recordMetadata.offset());
+     *  }
+     * }</pre>
+     *
+     * The records being sent to the same partition are guaranteed to execute in order.
+     *
+     * <p>
+     * When used as part of a transaction, if any of the send calls failed with an irrecoverable error,
+     * the final {@link #commitTransaction()} call will fail and throw the exception from the last failed send. When
+     * this happens, your application should call {@link #abortTransaction()} to reset the state and continue to send
+     * data.
+     * </p>
+     * <p>
+     * Some transactional send errors cannot be resolved with a call to {@link #abortTransaction()}.  In particular,
+     * if a transactional send finishes with a {@link ProducerFencedException}, a {@link org.apache.kafka.common.errors.OutOfOrderSequenceException},
+     * a {@link org.apache.kafka.common.errors.UnsupportedVersionException}, or an
+     * {@link org.apache.kafka.common.errors.AuthorizationException}, then the only option left is to call {@link #close()}.
+     * Fatal errors cause the producer to enter a defunct state in which future API calls will continue to raise
+     * the same underlying error wrapped in a new {@link KafkaException}.
+     * </p>
+     * <p>
+     * It is a similar picture when idempotence is enabled, but no <code>transactional.id</code> has been configured.
+     * In this case, {@link org.apache.kafka.common.errors.UnsupportedVersionException} and
+     * {@link org.apache.kafka.common.errors.AuthorizationException} are considered fatal errors. However,
+     * {@link ProducerFencedException} does not need to be handled. Additionally, it is possible to continue
+     * sending after receiving an {@link org.apache.kafka.common.errors.OutOfOrderSequenceException}, but doing so
+     * can result in out of order delivery of pending messages. To ensure proper ordering, you should close the
+     * producer and create a new instance.
+     * </p>
+     * <p>
+     * If the message format of the destination topic is not upgraded to 0.11.0.0, idempotent and transactional
+     * produce requests will fail with an {@link org.apache.kafka.common.errors.UnsupportedForMessageFormatException}
+     * error. If this is encountered during a transaction, it is possible to abort and continue. But note that future
+     * sends to the same topic will continue receiving the same exception until the topic is upgraded.
+     * </p>
+     * <p>
+     * Note that CompletionStage will generally execute in the I/O thread of the producer and so should be reasonably fast or
+     * they will delay the sending of messages from other threads. If you want to execute blocking or computationally
+     * expensive, it is recommended to call use CompletionStage's async method with your own {@link java.util.concurrent.Executor}
+     *
+     * @param record The record to send
+     * @throws AuthenticationException if authentication fails. See the exception for more details
+     * @throws AuthorizationException fatal error indicating that the producer is not allowed to write
+     * @throws IllegalStateException if a transactional.id has been configured and no transaction has been started, or
+     *                               when send is invoked after producer has been closed.
+     * @throws InterruptException If the thread is interrupted while blocked
+     * @throws SerializationException If the key or value are not valid objects given the configured serializers
+     * @throws KafkaException If a Kafka related error occurs that does not belong to the public API exceptions.
+     */
+    @Override
+    public CompletionStage<RecordMetadata> produce(ProducerRecord<K, V> record) {
+        // intercept the record, which can be potentially modified; this method does not throw exceptions
+        ProducerRecord<K, V> interceptedRecord = this.interceptors.onSend(record);
+        return doSend(interceptedRecord, null);
+    }
+
+    /**
      * Implementation of asynchronously send a record to a topic.
      */
-    private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
+    @SuppressWarnings("deprecation")
+    private CompletableFuture<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
         TopicPartition tp = null;
         try {
             throwIfProducerClosed();
@@ -941,14 +1034,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (log.isTraceEnabled()) {
                 log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             }
-            // producer callback will make sure to call both 'callback' and interceptor callback
-            Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
 
             if (transactionManager != null && transactionManager.isTransactional()) {
                 transactionManager.failIfNotReadyForSend();
             }
-            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
-                    serializedValue, headers, interceptCallback, remainingWaitMs, true, nowMs);
+            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey, serializedValue, headers, remainingWaitMs, true, nowMs);
 
             if (result.abortForNewBatch) {
                 int prevPartition = partition;
@@ -958,11 +1048,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 if (log.isTraceEnabled()) {
                     log.trace("Retrying append due to new batch creation for topic {} partition {}. The old partition was {}", record.topic(), partition, prevPartition);
                 }
-                // producer callback will make sure to call both 'callback' and interceptor callback
-                interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
-
-                result = accumulator.append(tp, timestamp, serializedKey,
-                    serializedValue, headers, interceptCallback, remainingWaitMs, false, nowMs);
+                result = accumulator.append(tp, timestamp, serializedKey, serializedValue, headers, remainingWaitMs, false, nowMs);
             }
 
             if (transactionManager != null && transactionManager.isTransactional())
@@ -972,7 +1058,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
             }
-            return result.future;
+            TopicPartition finalTp = tp;
+            return result.future()
+                // A callback called when producer request is complete. It in turn calls user-supplied callback (if given) and
+                // notifies producer interceptors about the request completion.
+                // producer callback will make sure to call both 'callback' and interceptor callback
+                .whenComplete((recordMetadata, throwable) -> {
+                    RecordMetadata metadata = recordMetadata != null
+                        ? recordMetadata
+                        : new RecordMetadata(finalTp, -1, -1, RecordBatch.NO_TIMESTAMP, -1L, -1, -1);
+                    this.interceptors.onAcknowledgement(metadata, (Exception) throwable);
+                    if (callback != null) callback.onCompletion(metadata, (Exception) throwable);
+                });
             // handling exceptions and record the errors;
             // for API exceptions return them in the future,
             // for other exceptions throw directly
@@ -982,7 +1079,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 callback.onCompletion(null, e);
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);
-            return new FutureFailure(e);
+            CompletableFuture<RecordMetadata> f = new CompletableFuture<>();
+            f.completeExceptionally(e);
+            return f;
         } catch (InterruptedException e) {
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);
@@ -1305,64 +1404,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         ClusterAndWaitTime(Cluster cluster, long waitedOnMetadataMs) {
             this.cluster = cluster;
             this.waitedOnMetadataMs = waitedOnMetadataMs;
-        }
-    }
-
-    private static class FutureFailure implements Future<RecordMetadata> {
-
-        private final ExecutionException exception;
-
-        public FutureFailure(Exception exception) {
-            this.exception = new ExecutionException(exception);
-        }
-
-        @Override
-        public boolean cancel(boolean interrupt) {
-            return false;
-        }
-
-        @Override
-        public RecordMetadata get() throws ExecutionException {
-            throw this.exception;
-        }
-
-        @Override
-        public RecordMetadata get(long timeout, TimeUnit unit) throws ExecutionException {
-            throw this.exception;
-        }
-
-        @Override
-        public boolean isCancelled() {
-            return false;
-        }
-
-        @Override
-        public boolean isDone() {
-            return true;
-        }
-
-    }
-
-    /**
-     * A callback called when producer request is complete. It in turn calls user-supplied callback (if given) and
-     * notifies producer interceptors about the request completion.
-     */
-    private static class InterceptorCallback<K, V> implements Callback {
-        private final Callback userCallback;
-        private final ProducerInterceptors<K, V> interceptors;
-        private final TopicPartition tp;
-
-        private InterceptorCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors, TopicPartition tp) {
-            this.userCallback = userCallback;
-            this.interceptors = interceptors;
-            this.tp = tp;
-        }
-
-        public void onCompletion(RecordMetadata metadata, Exception exception) {
-            metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1L, -1, -1);
-            this.interceptors.onAcknowledgement(metadata, exception);
-            if (this.userCallback != null)
-                this.userCallback.onCompletion(metadata, exception);
         }
     }
 }

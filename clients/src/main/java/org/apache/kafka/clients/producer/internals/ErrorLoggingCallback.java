@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
+import java.util.function.BiConsumer;
 
-public class ErrorLoggingCallback implements Callback {
+public class ErrorLoggingCallback implements BiConsumer<RecordMetadata, Throwable> {
     private static final Logger log = LoggerFactory.getLogger(ErrorLoggingCallback.class);
     private String topic;
     private byte[] key;
@@ -43,7 +43,8 @@ public class ErrorLoggingCallback implements Callback {
         this.logAsString = logAsString;
     }
 
-    public void onCompletion(RecordMetadata metadata, Exception e) {
+    @Override
+    public void accept(RecordMetadata recordMetadata, Throwable e) {
         if (e != null) {
             String keyString = (key == null) ? "null" :
                     logAsString ? new String(key, StandardCharsets.UTF_8) : key.length + " bytes";

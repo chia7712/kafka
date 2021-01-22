@@ -90,14 +90,14 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer.initTransactions()
 
     producer.beginTransaction()
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = false))
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "4", "4", willBeCommitted = false))
+    producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = false))
+    producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "4", "4", willBeCommitted = false))
     producer.flush()
     producer.abortTransaction()
 
     producer.beginTransaction()
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = true))
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = true))
+    producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = true))
+    producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = true))
     producer.commitTransaction()
 
     consumer.subscribe(List(topic1, topic2).asJava)
@@ -129,19 +129,19 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer2.beginTransaction()
 
     val latestVisibleTimestamp = System.currentTimeMillis()
-    producer2.send(new ProducerRecord(topic1, 0, latestVisibleTimestamp, "x".getBytes, "1".getBytes))
-    producer2.send(new ProducerRecord(topic2, 0, latestVisibleTimestamp, "x".getBytes, "1".getBytes))
+    producer2.produce(new ProducerRecord(topic1, 0, latestVisibleTimestamp, "x".getBytes, "1".getBytes))
+    producer2.produce(new ProducerRecord(topic2, 0, latestVisibleTimestamp, "x".getBytes, "1".getBytes))
     producer2.flush()
 
     val latestWrittenTimestamp = latestVisibleTimestamp + 1
-    producer1.send(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "a".getBytes, "1".getBytes))
-    producer1.send(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "b".getBytes, "2".getBytes))
-    producer1.send(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "c".getBytes, "3".getBytes))
-    producer1.send(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "d".getBytes, "4".getBytes))
+    producer1.produce(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "a".getBytes, "1".getBytes))
+    producer1.produce(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "b".getBytes, "2".getBytes))
+    producer1.produce(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "c".getBytes, "3".getBytes))
+    producer1.produce(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "d".getBytes, "4".getBytes))
     producer1.flush()
 
-    producer2.send(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "x".getBytes, "2".getBytes))
-    producer2.send(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "x".getBytes, "2".getBytes))
+    producer2.produce(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "x".getBytes, "2".getBytes))
+    producer2.produce(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "x".getBytes, "2".getBytes))
     producer2.commitTransaction()
 
     // ensure the records are visible to the read uncommitted consumer
@@ -192,14 +192,14 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     producer1.beginTransaction()
     producer2.beginTransaction()
-    producer2.send(new ProducerRecord(topic1, 0, "x".getBytes, "1".getBytes))
+    producer2.produce(new ProducerRecord(topic1, 0, "x".getBytes, "1".getBytes))
     producer2.flush()
 
-    producer1.send(new ProducerRecord(topic1, 0, "y".getBytes, "1".getBytes))
-    producer1.send(new ProducerRecord(topic1, 0, "y".getBytes, "2".getBytes))
+    producer1.produce(new ProducerRecord(topic1, 0, "y".getBytes, "1".getBytes))
+    producer1.produce(new ProducerRecord(topic1, 0, "y".getBytes, "2".getBytes))
     producer1.flush()
 
-    producer2.send(new ProducerRecord(topic1, 0, "x".getBytes, "2".getBytes))
+    producer2.produce(new ProducerRecord(topic1, 0, "x".getBytes, "2".getBytes))
     producer2.flush()
 
     producer1.abortTransaction()
@@ -273,7 +273,7 @@ class TransactionsTest extends KafkaServerTestHarness {
         records.foreach { record =>
           val key = new String(record.key(), StandardCharsets.UTF_8)
           val value = new String(record.value(), StandardCharsets.UTF_8)
-          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, key, value, willBeCommitted = shouldCommit))
+          producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, key, value, willBeCommitted = shouldCommit))
         }
 
         commit(producer, consumerGroupId, consumer)
@@ -316,13 +316,13 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer1.initTransactions()
 
     producer1.beginTransaction()
-    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false))
-    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = false))
+    producer1.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false))
+    producer1.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = false))
 
     producer2.initTransactions()  // ok, will abort the open transaction.
     producer2.beginTransaction()
-    producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
-    producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
+    producer2.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
+    producer2.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
 
     assertThrows(classOf[ProducerFencedException], () => producer1.commitTransaction())
 
@@ -345,14 +345,14 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer1.initTransactions()
 
     producer1.beginTransaction()
-    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false))
-    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = false))
+    producer1.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false))
+    producer1.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = false))
     producer1.flush()
 
     producer2.initTransactions()  // ok, will abort the open transaction.
     producer2.beginTransaction()
-    producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
-    producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
+    producer2.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
+    producer2.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
 
     assertThrows(classOf[ProducerFencedException], () => producer1.sendOffsetsToTransaction(Map(new TopicPartition("foobartopic", 0)
       -> new OffsetAndMetadata(110L)).asJava, "foobarGroup"))
@@ -417,7 +417,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     if (needInitAndSendMsg) {
       producer.initTransactions()
       producer.beginTransaction()
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
+      producer.produce(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
     }
 
     for  (i <- servers.indices) killBroker(i)
@@ -437,17 +437,17 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer1.initTransactions()
 
     producer1.beginTransaction()
-    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false))
-    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = false))
+    producer1.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false))
+    producer1.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = false))
 
     producer2.initTransactions()  // ok, will abort the open transaction.
     producer2.beginTransaction()
-    producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true)).get()
-    producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true)).get()
+    producer2.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true)).toCompletableFuture.get()
+    producer2.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true)).toCompletableFuture.get()
 
     try {
-      val result = producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "5", willBeCommitted = false))
-      val recordMetadata = result.get()
+      val result = producer1.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "5", willBeCommitted = false))
+      val recordMetadata = result.toCompletableFuture.get()
       error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
       servers.foreach { server =>
         error(s"log dirs: ${server.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
@@ -480,21 +480,21 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     producer1.initTransactions()
     producer1.beginTransaction()
-    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false))
-    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = false))
+    producer1.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false))
+    producer1.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = false))
     producer1.abortTransaction()
 
     producer2.initTransactions()  // ok, will abort the open transaction.
     producer2.beginTransaction()
-    producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
-      .get(20, TimeUnit.SECONDS)
-    producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
-      .get(20, TimeUnit.SECONDS)
+    producer2.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
+      .toCompletableFuture.get(20, TimeUnit.SECONDS)
+    producer2.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
+      .toCompletableFuture.get(20, TimeUnit.SECONDS)
 
     try {
       producer1.beginTransaction()
-      val result =  producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "5", willBeCommitted = false))
-      val recordMetadata = result.get()
+      val result =  producer1.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "5", willBeCommitted = false))
+      val recordMetadata = result.toCompletableFuture.get()
       error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
       servers.foreach { server =>
         error(s"log dirs: ${server.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
@@ -524,7 +524,8 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer.beginTransaction()
 
     // The first message and hence the first AddPartitions request should be successfully sent.
-    val firstMessageResult = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false)).get()
+    val firstMessageResult = producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1,
+      null, "1", "1", willBeCommitted = false)).toCompletableFuture.get()
     assertTrue(firstMessageResult.hasOffset)
 
     // Wait for the expiration cycle to kick in.
@@ -532,7 +533,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     try {
       // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
+      producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).toCompletableFuture.get()
       fail("should have raised a ProducerFencedException since the transaction has expired")
     } catch {
       case _: ProducerFencedException =>
@@ -619,7 +620,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       producer.initTransactions()
 
       producer.beginTransaction()
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "4", "4", willBeCommitted = true))
+      producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "4", "4", willBeCommitted = true))
       producer.commitTransaction()
 
       var producerStateEntry =
@@ -628,21 +629,21 @@ class TransactionsTest extends KafkaServerTestHarness {
       val initialProducerEpoch = producerStateEntry.producerEpoch
 
       producer.beginTransaction()
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false))
+      producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false))
 
       killBroker(partitionLeader) // kill the partition leader to prevent the batch from being submitted
-      val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
+      val failedFuture = producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
       Thread.sleep(6000) // Wait for the record to time out
       restartDeadBrokers()
 
-      org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
+      org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture.toCompletableFuture, classOf[TimeoutException])
       producer.abortTransaction()
 
       producer.beginTransaction()
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "4", "4", willBeCommitted = true))
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "1", "1", willBeCommitted = true))
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = true))
+      producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
+      producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "4", "4", willBeCommitted = true))
+      producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "1", "1", willBeCommitted = true))
+      producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = true))
       producer.commitTransaction()
 
       consumer.subscribe(List(topic1, topic2, testTopic).asJava)
@@ -671,7 +672,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer1.initTransactions()
 
     producer1.beginTransaction()
-    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
+    producer1.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
     producer1.commitTransaction()
 
     val partitionLeader = TestUtils.waitUntilLeaderIsKnown(servers, new TopicPartition(topic1, 0))
@@ -713,7 +714,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer3.initTransactions()
 
     producer3.beginTransaction()
-    producer3.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
+    producer3.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
     producer3.commitTransaction()
 
     // Check that the epoch only increased by 1
@@ -725,7 +726,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
                                                       start: Int, end: Int, willBeCommitted: Boolean): Unit = {
     for (i <- start until end) {
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic, null, value = i.toString, willBeCommitted = willBeCommitted, key = i.toString))
+      producer.produce(TestUtils.producerRecordWithExpectedTransactionStatus(topic, null, value = i.toString, willBeCommitted = willBeCommitted, key = i.toString))
     }
     producer.flush()
   }

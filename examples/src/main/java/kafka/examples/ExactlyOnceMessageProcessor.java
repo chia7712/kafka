@@ -105,7 +105,7 @@ public class ExactlyOnceMessageProcessor extends Thread {
                     for (ConsumerRecord<Integer, String> record : records) {
                         // Process the record and send to downstream.
                         ProducerRecord<Integer, String> customizedRecord = transform(record);
-                        producer.send(customizedRecord);
+                        producer.produce(customizedRecord);
                     }
 
                     Map<TopicPartition, OffsetAndMetadata> offsets = consumerOffsets();

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -61,7 +60,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -833,9 +832,10 @@ public class RecordCollectorTest {
                 public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
                     return new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
                         @Override
-                        public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
-                            callback.onCompletion(null, exception);
-                            return null;
+                        public synchronized CompletableFuture<RecordMetadata> produce(final ProducerRecord<byte[], byte[]> record) {
+                            final CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+                            future.completeExceptionally(exception);
+                            return future;
                         }
                     };
                 }

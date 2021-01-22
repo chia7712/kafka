@@ -50,7 +50,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     record.headers().add("headerKey", "headerValue".getBytes)
 
     val producer = createProducer()
-    producer.send(record)
+    producer.produce(record)
 
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment.size)
@@ -113,7 +113,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producer = createProducer(
       keySerializer = new ByteArraySerializer,
       valueSerializer = serializer)
-    producer.send(record)
+    producer.produce(record)
 
     val consumer = createConsumer(
       keyDeserializer = new ByteArrayDeserializer,
@@ -617,7 +617,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     producerProps.setProperty(ProducerConfig.LINGER_MS_CONFIG, Int.MaxValue.toString)
     val producer = createProducer(configOverrides = producerProps)
     (0 until numRecords).foreach { i =>
-      producer.send(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, s"value $i".getBytes))
+      producer.produce(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, s"value $i".getBytes))
     }
     producer.close()
   }
@@ -712,7 +712,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val record = new ProducerRecord(tp.topic(), tp.partition(), "key".getBytes,
       new Array[Byte](producerRecordSize))
     val producer = createProducer()
-    producer.send(record)
+    producer.produce(record)
 
     // consuming a record that is too large should succeed since KIP-74
     consumer.assign(List(tp).asJava)
@@ -743,8 +743,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       new Array[Byte](largeProducerRecordSize))
 
     val producer = createProducer()
-    producer.send(smallRecord).get
-    producer.send(largeRecord).get
+    producer.produce(smallRecord).toCompletableFuture.get
+    producer.produce(largeRecord).toCompletableFuture.get
 
     // we should only get the small record in the first `poll`
     consumer.assign(List(tp).asJava)
@@ -1003,12 +1003,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // produce records
     val numRecords = 10
     (0 until numRecords).map { i =>
-      testProducer.send(new ProducerRecord(tp.topic, tp.partition, s"key $i", s"value $i"))
+      testProducer.produce(new ProducerRecord(tp.topic, tp.partition, s"key $i", s"value $i")).toCompletableFuture
     }.foreach(_.get)
     assertEquals(numRecords, MockProducerInterceptor.ONSEND_COUNT.intValue)
     assertEquals(numRecords, MockProducerInterceptor.ON_SUCCESS_COUNT.intValue)
     // send invalid record
-    assertThrows(classOf[Throwable], () => testProducer.send(null), () => "Should not allow sending a null record")
+    assertThrows(classOf[Throwable], () => testProducer.produce(null).toCompletableFuture, () => "Should not allow sending a null record")
     assertEquals(1, MockProducerInterceptor.ON_ERROR_COUNT.intValue, "Interceptor should be notified about exception")
     assertEquals(0, MockProducerInterceptor.ON_ERROR_WITH_METADATA_COUNT.intValue(), "Interceptor should not receive metadata with an exception when record is null")
 
@@ -1054,7 +1054,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val numRecords = 100
     val testProducer = createProducer(keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
     (0 until numRecords).map { i =>
-      testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i", s"value $i"))
+      testProducer.produce(new ProducerRecord(tp.topic(), tp.partition(), s"key $i", s"value $i")).toCompletableFuture
     }.foreach(_.get)
 
     // create consumer with interceptor
@@ -1106,7 +1106,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val testProducer = createProducer()
 
     // producing records should succeed
-    testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key".getBytes, s"value will not be modified".getBytes))
+    testProducer.produce(new ProducerRecord(tp.topic(), tp.partition(), s"key".getBytes, s"value will not be modified".getBytes))
 
     // create consumer with interceptor that has different key and value types from the consumer
     this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
@@ -1769,9 +1769,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }, "Failed to create topic")
 
     val producer = createProducer()
-    producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
-    producer.send(new ProducerRecord(topic, partition, "k2".getBytes, "v2".getBytes)).get()
-    producer.send(new ProducerRecord(topic, partition, "k3".getBytes, "v3".getBytes)).get()
+    producer.produce(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).toCompletableFuture.get()
+    producer.produce(new ProducerRecord(topic, partition, "k2".getBytes, "v2".getBytes)).toCompletableFuture.get()
+    producer.produce(new ProducerRecord(topic, partition, "k3".getBytes, "v3".getBytes)).toCompletableFuture.get()
     producer.close()
 
     // consumer 1 uses the default group id and consumes from earliest offset
@@ -1834,8 +1834,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }, "Failed to create topic")
 
     val producer = createProducer()
-    producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
-    producer.send(new ProducerRecord(topic, partition, "k2".getBytes, "v2".getBytes)).get()
+    producer.produce(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).toCompletableFuture.get()
+    producer.produce(new ProducerRecord(topic, partition, "k2".getBytes, "v2".getBytes)).toCompletableFuture.get()
     producer.close()
 
     // consumer 1 uses the empty group id

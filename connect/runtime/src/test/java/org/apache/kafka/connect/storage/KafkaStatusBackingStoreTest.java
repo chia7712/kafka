@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -35,7 +35,6 @@ import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
-import org.easymock.IAnswer;
 import org.easymock.Mock;
 import org.junit.Before;
 import org.junit.Test;
@@ -46,12 +45,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.function.BiConsumer;
 
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.capture;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.newCapture;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -99,16 +100,13 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         expect(converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class)))
                 .andStubReturn(value);
 
-        final Capture<Callback> callbackCapture = newCapture();
-        kafkaBasedLog.send(eq("status-connector-conn"), eq(value), capture(callbackCapture));
-        expectLastCall()
-                .andAnswer(new IAnswer<Void>() {
-                    @Override
-                    public Void answer() throws Throwable {
-                        callbackCapture.getValue().onCompletion(null, null);
-                        return null;
-                    }
-                });
+        Capture<BiConsumer> producerCallbacks = newCapture();
+        CompletableFuture<RecordMetadata> future = mock(CompletableFuture.class);
+        expect(future.whenComplete(capture(producerCallbacks))).andAnswer(() -> {
+            producerCallbacks.getValue().accept(null, null);
+            return future;
+        });
+        expect(kafkaBasedLog.send(eq("status-connector-conn"), eq(value))).andReturn(future);
         replayAll();
 
         ConnectorStatus status = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.RUNNING, WORKER_ID, 0);
@@ -126,23 +124,16 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         expect(converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class)))
                 .andStubReturn(value);
 
-        final Capture<Callback> callbackCapture = newCapture();
-        kafkaBasedLog.send(eq("status-connector-conn"), eq(value), capture(callbackCapture));
-        expectLastCall()
-                .andAnswer(new IAnswer<Void>() {
-                    @Override
-                    public Void answer() throws Throwable {
-                        callbackCapture.getValue().onCompletion(null, new TimeoutException());
-                        return null;
-                    }
-                })
-                .andAnswer(new IAnswer<Void>() {
-                    @Override
-                    public Void answer() throws Throwable {
-                        callbackCapture.getValue().onCompletion(null, null);
-                        return null;
-                    }
-                });
+        Capture<BiConsumer> producerCallbacks = newCapture();
+        CompletableFuture<RecordMetadata> future = mock(CompletableFuture.class);
+        expect(future.whenComplete(capture(producerCallbacks))).andAnswer(() -> {
+            producerCallbacks.getValue().accept(null, new TimeoutException());
+            return future;
+        }).andAnswer(() -> {
+            producerCallbacks.getValue().accept(null, null);
+            return future;
+        });
+        expect(kafkaBasedLog.send(eq("status-connector-conn"), eq(value))).andStubReturn(future);
         replayAll();
 
         ConnectorStatus status = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.RUNNING, WORKER_ID, 0);
@@ -160,16 +151,13 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         expect(converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class)))
                 .andStubReturn(value);
 
-        final Capture<Callback> callbackCapture = newCapture();
-        kafkaBasedLog.send(eq("status-connector-conn"), eq(value), capture(callbackCapture));
-        expectLastCall()
-                .andAnswer(new IAnswer<Void>() {
-                    @Override
-                    public Void answer() throws Throwable {
-                        callbackCapture.getValue().onCompletion(null, new UnknownServerException());
-                        return null;
-                    }
-                });
+        Capture<BiConsumer> producerCallbacks = newCapture();
+        CompletableFuture<RecordMetadata> future = mock(CompletableFuture.class);
+        expect(future.whenComplete(capture(producerCallbacks))).andAnswer(() -> {
+            producerCallbacks.getValue().accept(null, new UnknownServerException());
+            return future;
+        });
+        expect(kafkaBasedLog.send(eq("status-connector-conn"), eq(value))).andReturn(future);
         replayAll();
 
         // the error is logged and ignored
@@ -217,8 +205,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), capture(statusValueStruct));
         EasyMock.expectLastCall().andReturn(value);
 
-        kafkaBasedLog.send(eq("status-connector-" + CONNECTOR), eq(value), anyObject(Callback.class));
-        expectLastCall();
+        expect(kafkaBasedLog.send(eq("status-connector-" + CONNECTOR), eq(value))).andReturn(new CompletableFuture<>());
 
         replayAll();
 
@@ -254,17 +241,14 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         expect(converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class)))
                 .andStubReturn(value);
 
-        final Capture<Callback> callbackCapture = newCapture();
-        kafkaBasedLog.send(eq("status-connector-conn"), eq(value), capture(callbackCapture));
-        expectLastCall()
-                .andAnswer(new IAnswer<Void>() {
-                    @Override
-                    public Void answer() throws Throwable {
-                        callbackCapture.getValue().onCompletion(null, null);
-                        store.read(consumerRecord(1, "status-connector-conn", value));
-                        return null;
-                    }
-                });
+        Capture<BiConsumer> producerCallbacks = newCapture();
+        CompletableFuture<RecordMetadata> future = mock(CompletableFuture.class);
+        expect(future.whenComplete(capture(producerCallbacks))).andAnswer(() -> {
+            producerCallbacks.getValue().accept(null, null);
+            store.read(consumerRecord(1, "status-connector-conn", value));
+            return future;
+        });
+        expect(kafkaBasedLog.send(eq("status-connector-conn"), eq(value))).andReturn(future);
 
         replayAll();
 
@@ -300,17 +284,14 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         expect(converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class)))
                 .andStubReturn(value);
 
-        final Capture<Callback> callbackCapture = newCapture();
-        kafkaBasedLog.send(eq("status-connector-conn"), eq(value), capture(callbackCapture));
-        expectLastCall()
-                .andAnswer(new IAnswer<Void>() {
-                    @Override
-                    public Void answer() throws Throwable {
-                        callbackCapture.getValue().onCompletion(null, null);
-                        store.read(consumerRecord(1, "status-connector-conn", value));
-                        return null;
-                    }
-                });
+        Capture<BiConsumer> producerCallbacks = newCapture();
+        CompletionStage<RecordMetadata> future = mock(CompletionStage.class);
+        expect(future.whenComplete(capture(producerCallbacks))).andAnswer(() -> {
+            producerCallbacks.getValue().accept(null, null);
+            store.read(consumerRecord(1, "status-connector-conn", value));
+            return future;
+        });
+        expect(kafkaBasedLog.send(eq("status-connector-conn"), eq(value))).andReturn(future);
         replayAll();
 
         store.read(consumerRecord(0, "status-connector-conn", value));
@@ -350,16 +331,13 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         expect(converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class)))
                 .andStubReturn(value);
 
-        final Capture<Callback> callbackCapture = newCapture();
-        kafkaBasedLog.send(eq("status-task-conn-0"), eq(value), capture(callbackCapture));
-        expectLastCall()
-                .andAnswer(new IAnswer<Void>() {
-                    @Override
-                    public Void answer() throws Throwable {
-                        callbackCapture.getValue().onCompletion(null, null);
-                        return null;
-                    }
-                });
+        Capture<BiConsumer> producerCallbacks = newCapture();
+        CompletableFuture<RecordMetadata> future = mock(CompletableFuture.class);
+        expect(future.whenComplete(capture(producerCallbacks))).andAnswer(() -> {
+            producerCallbacks.getValue().accept(null, null);
+            return future;
+        });
+        expect(kafkaBasedLog.send(eq("status-task-conn-0"), eq(value))).andReturn(future);
         replayAll();
 
         TaskStatus status = new TaskStatus(TASK, TaskStatus.State.RUNNING, WORKER_ID, 0);
@@ -403,13 +381,11 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
         converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class));
         EasyMock.expectLastCall().andReturn(value);
-        kafkaBasedLog.send(eq("status-connector-" + CONNECTOR), eq(value), anyObject(Callback.class));
-        expectLastCall();
+        expect(kafkaBasedLog.send(eq("status-connector-" + CONNECTOR), eq(value))).andReturn(new CompletableFuture<>());
 
         converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class));
         EasyMock.expectLastCall().andReturn(value);
-        kafkaBasedLog.send(eq("status-task-conn-0"), eq(value), anyObject(Callback.class));
-        expectLastCall();
+        expect(kafkaBasedLog.send(eq("status-task-conn-0"), eq(value))).andReturn(new CompletableFuture<>());
 
         expect(converter.toConnectData(STATUS_TOPIC, value)).andReturn(new SchemaAndValue(null, statusMap));
 
@@ -439,8 +415,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
         converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class));
         EasyMock.expectLastCall().andReturn(value);
-        kafkaBasedLog.send(eq("status-task-conn-0"), eq(value), anyObject(Callback.class));
-        expectLastCall();
+        expect(kafkaBasedLog.send(eq("status-task-conn-0"), eq(value))).andReturn(new CompletableFuture<>());
 
         expect(converter.toConnectData(STATUS_TOPIC, value)).andReturn(new SchemaAndValue(null, statusMap));
 

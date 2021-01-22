@@ -348,7 +348,7 @@ public class TransactionalMessageCopier {
                         producer.beginTransaction();
 
                         for (ConsumerRecord<String, String> record : records) {
-                            producer.send(producerRecordFromConsumerRecord(outputTopic, record));
+                            producer.produce(producerRecordFromConsumerRecord(outputTopic, record));
                         }
 
                         long messagesSentWithinCurrentTxn = records.count();

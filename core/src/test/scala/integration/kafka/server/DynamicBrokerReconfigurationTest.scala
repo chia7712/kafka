@@ -715,8 +715,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     // produced will not be consumed since they have offsets less than the consumer's committed offset.
     // Next 10 records produced should be consumed.
     (1 to 10).map(i => new ProducerRecord(topic, s"key$i", s"value$i"))
-      .map(producer.send)
-      .map(_.get(10, TimeUnit.SECONDS))
+      .map(producer.produce)
+      .map(_.toCompletableFuture.get(10, TimeUnit.SECONDS))
     verifyProduceConsume(producer, consumer, numRecords = 10, topic)
     consumer.commitSync()
   }
@@ -981,7 +981,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       .bootstrapServers(bootstrap)
       .build()
 
-    val future = producer1.send(new ProducerRecord(topic, "key", "value"))
+    val future = producer1.produce(new ProducerRecord(topic, "key", "value")).toCompletableFuture
     assertTrue(assertThrows(classOf[ExecutionException], () => future.get(2, TimeUnit.SECONDS))
       .getCause.isInstanceOf[org.apache.kafka.common.errors.TimeoutException])
 
@@ -1267,7 +1267,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
                                    numRecords: Int,
                                    topic: String): Unit = {
     val producerRecords = (1 to numRecords).map(i => new ProducerRecord(topic, s"key$i", s"value$i"))
-    producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
+    producerRecords.map(producer.produce).map(_.toCompletableFuture.get(10, TimeUnit.SECONDS))
     TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords)
   }
 
@@ -1549,7 +1549,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     executors += executor
     val future = executor.submit(new Runnable() {
       def run(): Unit = {
-        producer.send(new ProducerRecord(topic, "key", "value")).get
+        producer.produce(new ProducerRecord(topic, "key", "value")).toCompletableFuture.get
       }
     })
     verifyTimeout(future)
@@ -1710,7 +1710,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
           val key = sent.toString
           val partition = sent % numPartitions
           val record = new ProducerRecord(topic, partition, key, s"value$sent")
-          producer.send(record).get(10, TimeUnit.SECONDS)
+          producer.produce(record).toCompletableFuture.get(10, TimeUnit.SECONDS)
           lastSent.put(partition, sent)
           sent += 1
         }

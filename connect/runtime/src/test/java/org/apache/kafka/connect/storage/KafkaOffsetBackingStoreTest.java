@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -46,10 +47,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -184,12 +188,13 @@ public class KafkaOffsetBackingStoreTest {
         });
 
         // Set offsets
-        Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
-        storeLog.send(EasyMock.aryEq(TP0_KEY.array()), EasyMock.aryEq(TP0_VALUE.array()), EasyMock.capture(callback0));
-        PowerMock.expectLastCall();
-        Capture<org.apache.kafka.clients.producer.Callback> callback1 = EasyMock.newCapture();
-        storeLog.send(EasyMock.aryEq(TP1_KEY.array()), EasyMock.aryEq(TP1_VALUE.array()), EasyMock.capture(callback1));
-        PowerMock.expectLastCall();
+        AtomicReference<BiConsumer> callback0 = new AtomicReference<>();
+        CompletableFuture<RecordMetadata> future0 = createFutureToCaptureLambdaObject(callback0);
+        EasyMock.expect(storeLog.send(EasyMock.aryEq(TP0_KEY.array()), EasyMock.aryEq(TP0_VALUE.array()))).andReturn(future0);
+
+        AtomicReference<BiConsumer> callback1 = new AtomicReference<>();
+        CompletableFuture<RecordMetadata> future1 = createFutureToCaptureLambdaObject(callback1);
+        EasyMock.expect(storeLog.send(EasyMock.aryEq(TP1_KEY.array()), EasyMock.aryEq(TP1_VALUE.array()))).andReturn(future1);
 
         // Second get() should get the produced data and return the new values
         final Capture<Callback<Void>> secondGetReadToEndCallback = EasyMock.newCapture();
@@ -243,9 +248,9 @@ public class KafkaOffsetBackingStoreTest {
         assertFalse(setFuture.isDone());
         // Out of order callbacks shouldn't matter, should still require all to be invoked before invoking the callback
         // for the store's set callback
-        callback1.getValue().onCompletion(null, null);
+        callback1.get().accept(null, null);
         assertFalse(invoked.get());
-        callback0.getValue().onCompletion(null, null);
+        callback0.get().accept(null, null);
         setFuture.get(10000, TimeUnit.MILLISECONDS);
         assertTrue(invoked.get());
 
@@ -270,12 +275,13 @@ public class KafkaOffsetBackingStoreTest {
         expectStart(Collections.emptyList());
 
         // Set offsets
-        Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
-        storeLog.send(EasyMock.isNull(byte[].class), EasyMock.aryEq(TP0_VALUE.array()), EasyMock.capture(callback0));
-        PowerMock.expectLastCall();
-        Capture<org.apache.kafka.clients.producer.Callback> callback1 = EasyMock.newCapture();
-        storeLog.send(EasyMock.aryEq(TP1_KEY.array()), EasyMock.isNull(byte[].class), EasyMock.capture(callback1));
-        PowerMock.expectLastCall();
+        AtomicReference<BiConsumer> callback0 = new AtomicReference<>();
+        CompletableFuture<RecordMetadata> future0 = createFutureToCaptureLambdaObject(callback0);
+        EasyMock.expect(storeLog.send(EasyMock.isNull(byte[].class), EasyMock.aryEq(TP0_VALUE.array()))).andReturn(future0);
+
+        AtomicReference<BiConsumer> callback1 = new AtomicReference<>();
+        CompletableFuture<RecordMetadata> future1 = createFutureToCaptureLambdaObject(callback1);
+        EasyMock.expect(storeLog.send(EasyMock.aryEq(TP1_KEY.array()), EasyMock.isNull(byte[].class))).andReturn(future1);
 
         // Second get() should get the produced data and return the new values
         final Capture<Callback<Void>> secondGetReadToEndCallback = EasyMock.newCapture();
@@ -309,9 +315,9 @@ public class KafkaOffsetBackingStoreTest {
         assertFalse(setFuture.isDone());
         // Out of order callbacks shouldn't matter, should still require all to be invoked before invoking the callback
         // for the store's set callback
-        callback1.getValue().onCompletion(null, null);
+        callback1.get().accept(null, null);
         assertFalse(invoked.get());
-        callback0.getValue().onCompletion(null, null);
+        callback0.get().accept(null, null);
         setFuture.get(10000, TimeUnit.MILLISECONDS);
         assertTrue(invoked.get());
 
@@ -325,6 +331,22 @@ public class KafkaOffsetBackingStoreTest {
         PowerMock.verifyAll();
     }
 
+
+    /**
+     * EasyMock capture can't work with lambda object so we create a true CompletableFuture with custom whenComplete
+     * function to capture the lambda object.
+     */
+    private static CompletableFuture<RecordMetadata> createFutureToCaptureLambdaObject(AtomicReference<BiConsumer> callback) {
+        return new CompletableFuture<RecordMetadata>() {
+            @Override
+            public CompletableFuture<RecordMetadata> whenComplete(
+                    BiConsumer<? super RecordMetadata, ? super Throwable> action) {
+                callback.set(action);
+                return this;
+            }
+        };
+    }
+
     @Test
     public void testSetFailure() throws Exception {
         expectConfigure();
@@ -332,15 +354,17 @@ public class KafkaOffsetBackingStoreTest {
         expectStop();
 
         // Set offsets
-        Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
-        storeLog.send(EasyMock.aryEq(TP0_KEY.array()), EasyMock.aryEq(TP0_VALUE.array()), EasyMock.capture(callback0));
-        PowerMock.expectLastCall();
-        Capture<org.apache.kafka.clients.producer.Callback> callback1 = EasyMock.newCapture();
-        storeLog.send(EasyMock.aryEq(TP1_KEY.array()), EasyMock.aryEq(TP1_VALUE.array()), EasyMock.capture(callback1));
-        PowerMock.expectLastCall();
-        Capture<org.apache.kafka.clients.producer.Callback> callback2 = EasyMock.newCapture();
-        storeLog.send(EasyMock.aryEq(TP2_KEY.array()), EasyMock.aryEq(TP2_VALUE.array()), EasyMock.capture(callback2));
-        PowerMock.expectLastCall();
+        AtomicReference<BiConsumer> callback0 = new AtomicReference<>();
+        CompletableFuture<RecordMetadata> future0 = createFutureToCaptureLambdaObject(callback0);
+        EasyMock.expect(storeLog.send(EasyMock.aryEq(TP0_KEY.array()), EasyMock.aryEq(TP0_VALUE.array()))).andReturn(future0);
+
+        AtomicReference<BiConsumer> callback1 = new AtomicReference<>();
+        CompletableFuture<RecordMetadata> future1 = createFutureToCaptureLambdaObject(callback1);
+        EasyMock.expect(storeLog.send(EasyMock.aryEq(TP1_KEY.array()), EasyMock.aryEq(TP1_VALUE.array()))).andReturn(future1);
+
+        AtomicReference<BiConsumer> callback2 = new AtomicReference<>();
+        CompletableFuture<RecordMetadata> future2 = createFutureToCaptureLambdaObject(callback2);
+        EasyMock.expect(storeLog.send(EasyMock.aryEq(TP2_KEY.array()), EasyMock.aryEq(TP2_VALUE.array()))).andReturn(future2);
 
         expectClusterId();
 
@@ -367,12 +391,12 @@ public class KafkaOffsetBackingStoreTest {
         assertFalse(setFuture.isDone());
         // Out of order callbacks shouldn't matter, should still require all to be invoked before invoking the callback
         // for the store's set callback
-        callback1.getValue().onCompletion(null, null);
+        callback1.get().accept(null, null);
         assertFalse(invoked.get());
-        callback2.getValue().onCompletion(null, new KafkaException("bogus error"));
+        callback2.get().accept(null, new KafkaException("bogus error"));
         assertTrue(invoked.get());
         assertTrue(invokedFailure.get());
-        callback0.getValue().onCompletion(null, null);
+        callback0.get().accept(null, null);
         try {
             setFuture.get(10000, TimeUnit.MILLISECONDS);
             fail("Should have seen KafkaException thrown when waiting on KafkaOffsetBackingStore.set() future");

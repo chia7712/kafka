@@ -207,7 +207,7 @@ public class MirrorSourceTask extends SourceTask {
         OffsetSync offsetSync = new OffsetSync(topicPartition, upstreamOffset, downstreamOffset);
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(offsetSyncsTopic, 0,
                 offsetSync.recordKey(), offsetSync.recordValue());
-        offsetProducer.send(record, (x, e) -> {
+        offsetProducer.produce(record).whenComplete((x, e) -> {
             if (e != null) {
                 log.error("Failure sending offset sync.", e);
             } else {

@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -43,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -235,12 +237,8 @@ public class KafkaBasedLog<K, V> {
         return future;
     }
 
-    public void send(K key, V value) {
-        send(key, value, null);
-    }
-
-    public void send(K key, V value, org.apache.kafka.clients.producer.Callback callback) {
-        producer.send(new ProducerRecord<>(topic, key, value), callback);
+    public CompletionStage<RecordMetadata> send(K key, V value) {
+        return producer.produce(new ProducerRecord<>(topic, key, value));
     }
 
     public int partitionCount() {

@@ -121,7 +121,7 @@ public class BrokerCompatibilityTest {
                     producer.initTransactions();
                     producer.beginTransaction();
                 }
-                producer.send(new ProducerRecord<>(SOURCE_TOPIC, "key", "value"));
+                producer.produce(new ProducerRecord<>(SOURCE_TOPIC, "key", "value"));
                 if (eosEnabled) {
                     producer.commitTransaction();
                 }

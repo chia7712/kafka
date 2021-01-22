@@ -70,7 +70,7 @@ public class ShutdownDeadlockTest {
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
         final KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps);
-        producer.send(new ProducerRecord<>(topic, "a", "a"));
+        producer.produce(new ProducerRecord<>(topic, "a", "a"));
         producer.flush();
 
         streams.start();

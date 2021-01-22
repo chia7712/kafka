@@ -125,9 +125,9 @@ class LogDirFailureTest extends IntegrationTestHarness {
         .flatMap(_.leaderLogIfLocal).isDefined
     }.get
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, anotherPartitionWithTheSameLeader, topic.getBytes, "message".getBytes)
-    // When producer.send(...).get returns, it is guaranteed that ReplicaFetcherThread on the follower
+    // When producer.produce(...).get returns, it is guaranteed that ReplicaFetcherThread on the follower
     // has fetched from the leader and attempts to append to the offline replica.
-    producer.send(record).get
+    producer.produce(record).toCompletableFuture.get
 
     assertEquals(brokerCount, leaderServer.replicaManager.nonOfflinePartition(new TopicPartition(topic, anotherPartitionWithTheSameLeader))
       .get.inSyncReplicaIds.size)
@@ -150,7 +150,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     TestUtils.causeLogDirFailure(failureType, leaderServer, partition)
 
     // send() should fail due to either KafkaStorageException or NotLeaderOrFollowerException
-    val e = assertThrows(classOf[ExecutionException], () => producer.send(record).get(6000, TimeUnit.MILLISECONDS))
+    val e = assertThrows(classOf[ExecutionException], () => producer.produce(record).toCompletableFuture.get(6000, TimeUnit.MILLISECONDS))
     assertTrue(e.getCause.isInstanceOf[KafkaStorageException] ||
       // This may happen if ProduceRequest version <= 3
       e.getCause.isInstanceOf[NotLeaderOrFollowerException])
@@ -169,19 +169,19 @@ class LogDirFailureTest extends IntegrationTestHarness {
     val leaderServer = servers.find(_.config.brokerId == leaderServerId).get
 
     // The first send() should succeed
-    producer.send(record).get()
+    producer.produce(record).toCompletableFuture.get()
     TestUtils.consumeRecords(consumer, 1)
 
     TestUtils.causeLogDirFailure(failureType, leaderServer, partition)
 
     TestUtils.waitUntilTrue(() => {
       // ProduceResponse may contain KafkaStorageException and trigger metadata update
-      producer.send(record)
+      producer.produce(record)
       producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id() != leaderServerId
     }, "Expected new leader for the partition", 6000L)
 
     // Block on send to ensure that new leader accepts a message.
-    producer.send(record).get(6000L, TimeUnit.MILLISECONDS)
+    producer.produce(record).toCompletableFuture.get(6000L, TimeUnit.MILLISECONDS)
 
     // Consumer should receive some messages
     TestUtils.pollUntilAtLeastNumRecords(consumer, 1)

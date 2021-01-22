@@ -165,7 +165,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
     producers.foreach { case (clientMetadata, producer) =>
       val producerRecords = (1 to 10).map(i => new ProducerRecord(clientMetadata.topic, s"key$i".getBytes,
         s"value$i".getBytes))
-      producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
+      producerRecords.map(producer.produce).map(_.toCompletableFuture.get(10, TimeUnit.SECONDS))
 
       val consumer = consumers(clientMetadata)
       consumer.subscribe(Collections.singleton(clientMetadata.topic))

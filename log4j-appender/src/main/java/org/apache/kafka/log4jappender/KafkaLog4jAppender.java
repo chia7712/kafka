@@ -345,8 +345,8 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     protected void append(LoggingEvent event) {
         String message = subAppend(event);
         LogLog.debug("[" + new Date(event.getTimeStamp()) + "]" + message);
-        Future<RecordMetadata> response = producer.send(
-            new ProducerRecord<>(topic, message.getBytes(StandardCharsets.UTF_8)));
+        Future<RecordMetadata> response = producer.produce(
+            new ProducerRecord<>(topic, message.getBytes(StandardCharsets.UTF_8))).toCompletableFuture();
         if (syncSend) {
             try {
                 response.get();

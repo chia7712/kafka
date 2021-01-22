@@ -76,9 +76,6 @@ public class ErrorReporterTest {
     KafkaProducer<byte[], byte[]> producer;
 
     @Mock
-    Future<RecordMetadata> metadata;
-
-    @Mock
     Plugins plugins;
 
     private ErrorHandlingMetrics errorHandlingMetrics;
@@ -109,7 +106,7 @@ public class ErrorReporterTest {
 
         ProcessingContext context = processingContext();
 
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andThrow(new RuntimeException());
+        EasyMock.expect(producer.produce(EasyMock.anyObject())).andThrow(new RuntimeException());
         replay(producer);
 
         // since topic name is empty, this method should be a NOOP.
@@ -124,7 +121,7 @@ public class ErrorReporterTest {
 
         ProcessingContext context = processingContext();
 
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata);
+        EasyMock.expect(producer.produce(EasyMock.anyObject())).andReturn(new CompletableFuture<>());
         replay(producer);
 
         deadLetterQueueReporter.report(context);
@@ -139,7 +136,7 @@ public class ErrorReporterTest {
 
         ProcessingContext context = processingContext();
 
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata).times(2);
+        EasyMock.expect(producer.produce(EasyMock.anyObject())).andReturn(new CompletableFuture<>()).times(2);
         replay(producer);
 
         deadLetterQueueReporter.report(context);
@@ -155,7 +152,7 @@ public class ErrorReporterTest {
 
         ProcessingContext context = processingContext();
 
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata);
+        EasyMock.expect(producer.produce(EasyMock.anyObject())).andReturn(new CompletableFuture<>());
         replay(producer);
 
         deadLetterQueueReporter.report(context);

@@ -80,6 +80,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -147,8 +148,6 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     @MockStrict private TaskStatus.Listener statusListener;
     @Mock private StatusBackingStore statusBackingStore;
 
-    private Capture<org.apache.kafka.clients.producer.Callback> producerCallbacks;
-
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
     static {
         TASK_PROPS.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
@@ -169,7 +168,6 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         plugins = new Plugins(workerProps);
         config = new StandaloneConfig(workerProps);
         sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorPropsWithGroups(TOPIC), true);
-        producerCallbacks = EasyMock.newCapture();
         metrics = new MockConnectMetrics();
     }
 
@@ -671,7 +669,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         expectPreliminaryCalls();
         expectTopicCreation(TOPIC);
 
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject()))
+        EasyMock.expect(producer.produce(EasyMock.anyObject()))
                 .andThrow(new KafkaException("Producer closed while send in progress", new InvalidTopicException(TOPIC)));
 
         PowerMock.replayAll();
@@ -1177,8 +1175,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         PowerMock.expectLastCall();
 
         EasyMock.expect(
-                producer.send(EasyMock.anyObject(ProducerRecord.class),
-                        EasyMock.anyObject(org.apache.kafka.clients.producer.Callback.class)))
+                producer.produce(EasyMock.anyObject(ProducerRecord.class)))
                 .andThrow(error);
     }
 
@@ -1233,30 +1230,16 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         }
 
         // 2. Converted data passed to the producer, which will need callbacks invoked for flush to work
-        IExpectationSetters<Future<RecordMetadata>> expect = EasyMock.expect(
-            producer.send(EasyMock.capture(sent),
-                EasyMock.capture(producerCallbacks)));
-        IAnswer<Future<RecordMetadata>> expectResponse = new IAnswer<Future<RecordMetadata>>() {
-            @Override
-            public Future<RecordMetadata> answer() throws Throwable {
-                synchronized (producerCallbacks) {
-                    for (org.apache.kafka.clients.producer.Callback cb : producerCallbacks.getValues()) {
-                        if (sendSuccess) {
-                            cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0,
-                                0L, 0L, 0, 0), null);
-                        } else {
-                            cb.onCompletion(null, new TopicAuthorizationException("foo"));
-                        }
-                    }
-                    producerCallbacks.reset();
-                }
-                return sendFuture;
-            }
+        IAnswer<CompletableFuture<RecordMetadata>> answer = () -> {
+            CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+            if (sendSuccess) future.complete(new RecordMetadata(new TopicPartition("foo", 0), 0, 0,
+                    0L, 0L, 0, 0));
+            else future.completeExceptionally(new TopicAuthorizationException("foo"));
+            return future;
         };
-        if (anyTimes)
-            expect.andStubAnswer(expectResponse);
-        else
-            expect.andAnswer(expectResponse);
+
+        if (anyTimes) EasyMock.expect(producer.produce(EasyMock.capture(sent))).andStubAnswer(answer);
+        else EasyMock.expect(producer.produce(EasyMock.capture(sent))).andAnswer(answer);
 
         if (sendSuccess) {
             // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit

@@ -109,13 +109,13 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     //Send messages equally to the two partitions, then half as many to a third
     producer = createProducer(getBrokerListStrFromServers(brokers), acks = -1)
     (0 until 10).foreach { _ =>
-      producer.send(new ProducerRecord(topic1, 0, null, "IHeartLogs".getBytes))
+      producer.produce(new ProducerRecord(topic1, 0, null, "IHeartLogs".getBytes))
     }
     (0 until 20).foreach { _ =>
-      producer.send(new ProducerRecord(topic1, 1, null, "OhAreThey".getBytes))
+      producer.produce(new ProducerRecord(topic1, 1, null, "OhAreThey".getBytes))
     }
     (0 until 30).foreach { _ =>
-      producer.send(new ProducerRecord(topic2, 0, null, "IReallyDo".getBytes))
+      producer.produce(new ProducerRecord(topic2, 0, null, "IReallyDo".getBytes))
     }
     producer.flush()
 
@@ -153,7 +153,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     producer = createProducer(getBrokerListStrFromServers(brokers), acks = -1)
 
     //1. Given a single message
-    producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
+    producer.produce(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).toCompletableFuture.get
     var fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
 
     //Then epoch should be 0 and leo: 1
@@ -166,7 +166,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     brokers(1).shutdown()
     brokers(1).startup()
 
-    producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
+    producer.produce(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).toCompletableFuture.get
     fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
 
     //Then epoch 0 should still be the start offset of epoch 1
@@ -191,7 +191,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     brokers(1).shutdown()
     brokers(1).startup()
 
-    producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
+    producer.produce(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).toCompletableFuture.get
     fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
 
     //Then Epoch 0 should still map to offset 1
@@ -266,7 +266,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     val records =
       testMessageList1.map(m => new ProducerRecord(topic1, m, m)) ++
         testMessageList2.map(m => new ProducerRecord(topic2, m, m))
-    records.map(producer.send).foreach(_.get)
+    records.map(producer.produce).foreach(_.toCompletableFuture.get)
     producer.close()
   }
 

@@ -67,7 +67,7 @@ public class MockProducerTest {
     @Test
     public void testAutoCompleteMock() throws Exception {
         buildMockProducer(true);
-        Future<RecordMetadata> metadata = producer.send(record1);
+        Future<RecordMetadata> metadata = producer.produce(record1).toCompletableFuture();
         assertTrue(metadata.isDone(), "Send should be immediately complete");
         assertFalse(isError(metadata), "Send should be successful");
         assertEquals(0L, metadata.get().offset(), "Offset should be 0");
@@ -85,7 +85,7 @@ public class MockProducerTest {
                 Collections.emptySet(), Collections.emptySet());
         MockProducer<String, String> producer = new MockProducer<>(cluster, true, new DefaultPartitioner(), new StringSerializer(), new StringSerializer());
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "key", "value");
-        Future<RecordMetadata> metadata = producer.send(record);
+        Future<RecordMetadata> metadata = producer.produce(record).toCompletableFuture();
         assertEquals(1, metadata.get().partition(), "Partition should be correct");
         producer.clear();
         assertEquals(0, producer.history().size(), "Clear should erase our history");
@@ -95,9 +95,9 @@ public class MockProducerTest {
     @Test
     public void testManualCompletion() throws Exception {
         buildMockProducer(false);
-        Future<RecordMetadata> md1 = producer.send(record1);
+        Future<RecordMetadata> md1 = producer.produce(record1).toCompletableFuture();
         assertFalse(md1.isDone(), "Send shouldn't have completed");
-        Future<RecordMetadata> md2 = producer.send(record2);
+        Future<RecordMetadata> md2 = producer.produce(record2).toCompletableFuture();
         assertFalse(md2.isDone(), "Send shouldn't have completed");
         assertTrue(producer.completeNext(), "Complete the first request");
         assertFalse(isError(md1), "Requst should be successful");
@@ -112,8 +112,8 @@ public class MockProducerTest {
         }
         assertFalse(producer.completeNext(), "No more requests to complete");
 
-        Future<RecordMetadata> md3 = producer.send(record1);
-        Future<RecordMetadata> md4 = producer.send(record2);
+        Future<RecordMetadata> md3 = producer.produce(record1).toCompletableFuture();
+        Future<RecordMetadata> md4 = producer.produce(record2).toCompletableFuture();
         assertTrue(!md3.isDone() && !md4.isDone(), "Requests should not be completed.");
         producer.flush();
         assertTrue(md3.isDone() && md4.isDone(), "Requests should be completed.");
@@ -259,7 +259,7 @@ public class MockProducerTest {
         buildMockProducer(true);
         producer.initTransactions();
         producer.fenceProducer();
-        Throwable e = assertThrows(KafkaException.class, () -> producer.send(null));
+        Throwable e = assertThrows(KafkaException.class, () -> producer.produce(null));
         assertTrue(e.getCause() instanceof ProducerFencedException, "The root cause of the exception should be ProducerFenced");
     }
 
@@ -301,8 +301,8 @@ public class MockProducerTest {
         producer.initTransactions();
         producer.beginTransaction();
 
-        producer.send(record1);
-        producer.send(record2);
+        producer.produce(record1);
+        producer.produce(record2);
 
         assertTrue(producer.history().isEmpty());
 
@@ -321,8 +321,8 @@ public class MockProducerTest {
         producer.initTransactions();
         producer.beginTransaction();
 
-        Future<RecordMetadata> md1 = producer.send(record1);
-        Future<RecordMetadata> md2 = producer.send(record2);
+        Future<RecordMetadata> md1 = producer.produce(record1).toCompletableFuture();
+        Future<RecordMetadata> md2 = producer.produce(record2).toCompletableFuture();
 
         assertFalse(md1.isDone());
         assertFalse(md2.isDone());
@@ -339,8 +339,8 @@ public class MockProducerTest {
         producer.initTransactions();
 
         producer.beginTransaction();
-        producer.send(record1);
-        producer.send(record2);
+        producer.produce(record1);
+        producer.produce(record2);
         producer.abortTransaction();
         assertTrue(producer.history().isEmpty());
 
@@ -355,7 +355,7 @@ public class MockProducerTest {
         producer.initTransactions();
         producer.beginTransaction();
 
-        Future<RecordMetadata> md1 = producer.send(record1);
+        Future<RecordMetadata> md1 = producer.produce(record1).toCompletableFuture();
         assertFalse(md1.isDone());
 
         producer.abortTransaction();
@@ -368,8 +368,8 @@ public class MockProducerTest {
         producer.initTransactions();
 
         producer.beginTransaction();
-        producer.send(record1);
-        producer.send(record2);
+        producer.produce(record1);
+        producer.produce(record2);
         producer.commitTransaction();
 
         producer.beginTransaction();
@@ -647,7 +647,7 @@ public class MockProducerTest {
     public void shouldThrowOnSendIfProducerIsClosed() {
         buildMockProducer(true);
         producer.close();
-        assertThrows(IllegalStateException.class, () -> producer.send(null));
+        assertThrows(IllegalStateException.class, () -> producer.produce(null));
     }
 
     @Test
@@ -703,7 +703,7 @@ public class MockProducerTest {
     @SuppressWarnings("unchecked")
     public void shouldThrowClassCastException() {
         try (MockProducer<Integer, String> customProducer = new MockProducer<>(true, new IntegerSerializer(), new StringSerializer())) {
-            assertThrows(ClassCastException.class, () -> customProducer.send(new ProducerRecord(topic, "key1", "value1")));
+            assertThrows(ClassCastException.class, () -> customProducer.produce(new ProducerRecord(topic, "key1", "value1")));
         }
     }
 
@@ -716,21 +716,21 @@ public class MockProducerTest {
     @Test
     public void shouldBeFlushedWithAutoCompleteIfBufferedRecords() {
         buildMockProducer(true);
-        producer.send(record1);
+        producer.produce(record1);
         assertTrue(producer.flushed());
     }
 
     @Test
     public void shouldNotBeFlushedWithNoAutoCompleteIfBufferedRecords() {
         buildMockProducer(false);
-        producer.send(record1);
+        producer.produce(record1);
         assertFalse(producer.flushed());
     }
 
     @Test
     public void shouldNotBeFlushedAfterFlush() {
         buildMockProducer(false);
-        producer.send(record1);
+        producer.produce(record1);
         producer.flush();
         assertTrue(producer.flushed());
     }

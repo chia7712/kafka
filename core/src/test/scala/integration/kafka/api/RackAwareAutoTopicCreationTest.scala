@@ -48,7 +48,7 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
     try {
       // Send a message to auto-create the topic
       val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
-      assertEquals(0L, producer.send(record).get.offset, "Should have offset 0")
+      assertEquals(0L, producer.produce(record).toCompletableFuture.get.offset, "Should have offset 0")
 
       // double check that the topic is created with leader elected
       TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)

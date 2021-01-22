@@ -149,12 +149,12 @@ public class DeadLetterQueueReporter implements ErrorReporter {
             populateContextHeaders(producerRecord, context);
         }
 
-        return this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
+        return this.kafkaProducer.produce(producerRecord).whenComplete((metadata, exception) -> {
             if (exception != null) {
                 log.error("Could not produce message to dead letter queue. topic=" + dlqTopicName, exception);
                 errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
             }
-        });
+        }).toCompletableFuture();
     }
 
     // Visible for testing

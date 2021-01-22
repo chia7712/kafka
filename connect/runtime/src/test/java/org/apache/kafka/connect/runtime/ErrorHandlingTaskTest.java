@@ -77,6 +77,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
@@ -365,7 +366,7 @@ public class ErrorHandlingTaskTest {
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record1));
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record2));
         expectTopicCreation(TOPIC);
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(null).times(2);
+        EasyMock.expect(producer.produce(EasyMock.anyObject())).andReturn(new CompletableFuture<>()).times(2);
 
         PowerMock.replayAll();
 
@@ -430,7 +431,7 @@ public class ErrorHandlingTaskTest {
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record1));
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record2));
         expectTopicCreation(TOPIC);
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(null).times(2);
+        EasyMock.expect(producer.produce(EasyMock.anyObject())).andReturn(new CompletableFuture<>()).times(2);
 
         PowerMock.replayAll();
 

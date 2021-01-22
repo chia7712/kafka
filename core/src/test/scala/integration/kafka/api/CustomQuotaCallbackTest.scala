@@ -199,7 +199,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   private def produceWithoutThrottle(topic: String, numRecords: Int): Unit = {
     (0 until numRecords).foreach { i =>
       val payload = i.toString.getBytes
-      producerWithoutQuota.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, null, null, payload))
+      producerWithoutQuota.produce(new ProducerRecord[Array[Byte], Array[Byte]](topic, null, null, payload))
     }
   }
 

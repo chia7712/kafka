@@ -250,7 +250,7 @@ public class IntegrationTestUtils {
                 producer.beginTransaction();
             }
             for (final KeyValue<K, V> record : records) {
-                producer.send(new ProducerRecord<>(topic, null, time.milliseconds(), record.key, record.value, headers));
+                producer.produce(new ProducerRecord<>(topic, null, time.milliseconds(), record.key, record.value, headers));
                 time.sleep(1L);
             }
             if (enableTransactions) {
@@ -315,7 +315,7 @@ public class IntegrationTestUtils {
                 producer.beginTransaction();
             }
             for (final KeyValue<K, V> record : records) {
-                producer.send(new ProducerRecord<>(topic, null, timestamp, record.key, record.value, headers));
+                producer.produce(new ProducerRecord<>(topic, null, timestamp, record.key, record.value, headers));
             }
             if (enableTransactions) {
                 producer.commitTransaction();
@@ -335,7 +335,7 @@ public class IntegrationTestUtils {
             }
             final LinkedList<Future<RecordMetadata>> futures = new LinkedList<>();
             for (final KeyValueTimestamp<K, V> record : toProduce) {
-                final Future<RecordMetadata> f = producer.send(
+                final Future<RecordMetadata> f = producer.produce(
                     new ProducerRecord<>(
                         topic,
                         partition.orElse(null),
@@ -344,7 +344,7 @@ public class IntegrationTestUtils {
                         record.value(),
                         null
                     )
-                );
+                ).toCompletableFuture();
                 futures.add(f);
             }
 
@@ -384,7 +384,8 @@ public class IntegrationTestUtils {
             for (final KeyValue<K, V> record : records) {
                 producer.beginTransaction();
                 final Future<RecordMetadata> f = producer
-                        .send(new ProducerRecord<>(topic, null, timestamp, record.key, record.value));
+                        .produce(new ProducerRecord<>(topic, null, timestamp, record.key, record.value))
+                        .toCompletableFuture();
                 f.get();
                 producer.abortTransaction();
             }

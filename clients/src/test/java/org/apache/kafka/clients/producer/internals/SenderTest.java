@@ -23,7 +23,6 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.message.ProduceRequestData;
@@ -458,26 +457,25 @@ public class SenderTest {
     public void testAppendInExpiryCallback() throws InterruptedException {
         int messagesPerBatch = 10;
         final AtomicInteger expiryCallbackCount = new AtomicInteger(0);
-        final AtomicReference<Exception> unexpectedException = new AtomicReference<>();
+        final AtomicReference<Throwable> unexpectedException = new AtomicReference<>();
         final byte[] key = "key".getBytes();
         final byte[] value = "value".getBytes();
         final long maxBlockTimeMs = 1000;
-        Callback callback = (metadata, exception) -> {
-            if (exception instanceof TimeoutException) {
-                expiryCallbackCount.incrementAndGet();
-                try {
-                    accumulator.append(tp1, 0L, key, value,
-                        Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
-                } catch (InterruptedException e) {
-                    throw new RuntimeException("Unexpected interruption", e);
-                }
-            } else if (exception != null)
-                unexpectedException.compareAndSet(null, exception);
-        };
-
         final long nowMs = time.milliseconds();
         for (int i = 0; i < messagesPerBatch; i++)
-            accumulator.append(tp1, 0L, key, value, null, callback, maxBlockTimeMs, false, nowMs);
+            accumulator.append(tp1, 0L, key, value, null, maxBlockTimeMs, false, nowMs)
+            .future().whenComplete((recordMetadata, throwable) -> {
+                if (throwable instanceof TimeoutException) {
+                    expiryCallbackCount.incrementAndGet();
+                    try {
+                        accumulator.append(tp1, 0L, key, value,
+                                Record.EMPTY_HEADERS, maxBlockTimeMs, false, time.milliseconds());
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException("Unexpected interruption", e);
+                    }
+                } else if (throwable != null)
+                    unexpectedException.compareAndSet(null, throwable);
+            });
 
         // Advance the clock to expire the first batch.
         time.sleep(10000);
@@ -2334,9 +2332,9 @@ public class SenderTest {
             // Send the first message.
             long nowMs = time.milliseconds();
             Future<RecordMetadata> f1 =
-                    accumulator.append(tp, 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, false, nowMs).future;
+                    accumulator.append(tp, 0L, "key1".getBytes(), new byte[batchSize / 2], null, MAX_BLOCK_TIMEOUT, false, nowMs).future();
             Future<RecordMetadata> f2 =
-                    accumulator.append(tp, 0L, "key2".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, false, nowMs).future;
+                    accumulator.append(tp, 0L, "key2".getBytes(), new byte[batchSize / 2], null, MAX_BLOCK_TIMEOUT, false, nowMs).future();
             sender.runOnce(); // connect
             sender.runOnce(); // send produce request
 
@@ -2709,7 +2707,7 @@ public class SenderTest {
         // Run it once so that the partition is added to the transaction.
         sender.runOnce();
         // Append a record to the accumulator.
-        FutureRecordMetadata metadata = appendToAccumulator(tp0, time.milliseconds(), "key", "value");
+        Future<RecordMetadata> metadata = appendToAccumulator(tp0, time.milliseconds(), "key", "value");
         // Now abort the transaction manually.
         txnManager.beginAbort();
         // Try to send.
@@ -2877,13 +2875,12 @@ public class SenderTest {
         }
     }
 
-    private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
+    private Future<RecordMetadata> appendToAccumulator(TopicPartition tp) throws InterruptedException {
         return appendToAccumulator(tp, time.milliseconds(), "key", "value");
     }
 
-    private FutureRecordMetadata appendToAccumulator(TopicPartition tp, long timestamp, String key, String value) throws InterruptedException {
-        return accumulator.append(tp, timestamp, key.getBytes(), value.getBytes(), Record.EMPTY_HEADERS,
-                null, MAX_BLOCK_TIMEOUT, false, time.milliseconds()).future;
+    private Future<RecordMetadata> appendToAccumulator(TopicPartition tp, long timestamp, String key, String value) throws InterruptedException {
+        return accumulator.append(tp, timestamp, key.getBytes(), value.getBytes(), Record.EMPTY_HEADERS, MAX_BLOCK_TIMEOUT, false, time.milliseconds()).future();
     }
 
     @SuppressWarnings("deprecation")

@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -52,6 +51,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -131,7 +131,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                         intSerde.serializer().serialize("", value)
                     );
 
-                producer.send(record);
+                producer.produce(record);
 
                 numRecordsProduced++;
                 if (numRecordsProduced % 100 == 0) {
@@ -183,7 +183,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                             intSerde.serializer().serialize("", value)
                         );
 
-                    producer.send(record, new TestCallback(record, needRetry));
+                    producer.produce(record).whenComplete(new TestCallback(record, needRetry));
 
                     numRecordsProduced++;
                     allData.get(key).add(value);
@@ -200,7 +200,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 final List<ProducerRecord<byte[], byte[]>> needRetry2 = new ArrayList<>();
                 for (final ProducerRecord<byte[], byte[]> record : needRetry) {
                     System.out.println("retry producing " + stringSerde.deserializer().deserialize("", record.key()));
-                    producer.send(record, new TestCallback(record, needRetry2));
+                    producer.produce(record).whenComplete(new TestCallback(record, needRetry2));
                 }
                 producer.flush();
                 needRetry = needRetry2;
@@ -215,7 +215,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             // all suppressed records.
             final List<PartitionInfo> partitions = producer.partitionsFor("data");
             for (final PartitionInfo partition : partitions) {
-                producer.send(new ProducerRecord<>(
+                producer.produce(new ProducerRecord<>(
                     partition.topic(),
                     partition.partition(),
                     System.currentTimeMillis() + Duration.ofDays(2).toMillis(),
@@ -237,7 +237,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return producerProps;
     }
 
-    private static class TestCallback implements Callback {
+    private static class TestCallback implements BiConsumer<RecordMetadata, Throwable> {
         private final ProducerRecord<byte[], byte[]> originalRecord;
         private final List<ProducerRecord<byte[], byte[]>> needRetry;
 
@@ -248,7 +248,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
 
         @Override
-        public void onCompletion(final RecordMetadata metadata, final Exception exception) {
+        public void accept(final RecordMetadata metadata, final Throwable exception) {
             if (exception != null) {
                 if (exception instanceof TimeoutException) {
                     needRetry.add(originalRecord);

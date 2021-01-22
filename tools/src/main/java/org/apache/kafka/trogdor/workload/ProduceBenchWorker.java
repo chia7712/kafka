@@ -21,7 +21,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -124,26 +123,6 @@ public class ProduceBenchWorker implements TaskWorker {
                 executor.submit(new SendRecords(active));
             } catch (Throwable e) {
                 WorkerUtils.abort(log, "Prepare", e, doneFuture);
-            }
-        }
-    }
-
-    private static class SendRecordsCallback implements Callback {
-        private final SendRecords sendRecords;
-        private final long startMs;
-
-        SendRecordsCallback(SendRecords sendRecords, long startMs) {
-            this.sendRecords = sendRecords;
-            this.startMs = startMs;
-        }
-
-        @Override
-        public void onCompletion(RecordMetadata metadata, Exception exception) {
-            long now = Time.SYSTEM.milliseconds();
-            long durationMs = now - startMs;
-            sendRecords.recordDuration(durationMs);
-            if (exception != null) {
-                log.error("SendRecordsCallback: error", exception);
             }
         }
     }
@@ -305,8 +284,17 @@ public class ProduceBenchWorker implements TaskWorker {
                 record = new ProducerRecord<>(
                     partition.topic(), partition.partition(), keys.next(), values.next());
             }
-            sendFuture = producer.send(record,
-                new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
+            long startMs = Time.SYSTEM.milliseconds();
+            sendFuture = producer.produce(record)
+                .whenComplete((recordMetadata, throwable) -> {
+                    long now = Time.SYSTEM.milliseconds();
+                    long durationMs = now - startMs;
+                    this.recordDuration(durationMs);
+                    if (throwable != null) {
+                        log.error("SendRecordsCallback: error", throwable);
+                    }
+                })
+                .toCompletableFuture();
             throttle.increment();
         }
 

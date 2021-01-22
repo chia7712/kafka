@@ -87,7 +87,7 @@ class WorkerSourceTask extends WorkerTask {
     private final CloseableOffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
-    private final AtomicReference<Exception> producerSendException;
+    private final AtomicReference<Throwable> producerSendException;
     private final boolean isTopicTrackingEnabled;
     private final TopicCreation topicCreation;
 
@@ -347,9 +347,8 @@ class WorkerSourceTask extends WorkerTask {
             try {
                 maybeCreateTopic(record.topic());
                 final String topic = producerRecord.topic();
-                producer.send(
-                    producerRecord,
-                    (recordMetadata, e) -> {
+                producer.produce(producerRecord)
+                    .whenComplete((recordMetadata, e) -> {
                         if (e != null) {
                             log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
                             log.debug("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);

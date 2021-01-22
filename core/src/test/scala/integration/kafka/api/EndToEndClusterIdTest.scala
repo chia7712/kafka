@@ -186,7 +186,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     val futures = (0 until numRecords).map { i =>
       val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)
       debug(s"Sending this record: $record")
-      producer.send(record)
+      producer.produce(record).toCompletableFuture
     }
     try {
       futures.foreach(_.get)

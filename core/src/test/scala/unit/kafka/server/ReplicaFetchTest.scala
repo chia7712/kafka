@@ -62,7 +62,7 @@ class ReplicaFetchTest extends ZooKeeperTestHarness  {
                                                valueSerializer = new StringSerializer)
     val records = testMessageList1.map(m => new ProducerRecord(topic1, m, m)) ++
       testMessageList2.map(m => new ProducerRecord(topic2, m, m))
-    records.map(producer.send).foreach(_.get)
+    records.map(producer.produce).foreach(_.toCompletableFuture.get)
     producer.close()
 
     def logsMatch(): Boolean = {

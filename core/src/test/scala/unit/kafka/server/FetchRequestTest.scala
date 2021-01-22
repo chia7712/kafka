@@ -103,10 +103,10 @@ class FetchRequestTest extends BaseRequestTest {
     val partitionsWithLargeMessages = partitionsForLeader.takeRight(2)
     val partitionWithLargeMessage1 = partitionsWithLargeMessages.head
     val partitionWithLargeMessage2 = partitionsWithLargeMessages(1)
-    producer.send(new ProducerRecord(partitionWithLargeMessage1.topic, partitionWithLargeMessage1.partition,
-      "larger than partition limit", new String(new Array[Byte](maxPartitionBytes + 1)))).get
-    producer.send(new ProducerRecord(partitionWithLargeMessage2.topic, partitionWithLargeMessage2.partition,
-      "larger than response limit", new String(new Array[Byte](maxResponseBytes + 1)))).get
+    producer.produce(new ProducerRecord(partitionWithLargeMessage1.topic, partitionWithLargeMessage1.partition,
+      "larger than partition limit", new String(new Array[Byte](maxPartitionBytes + 1)))).toCompletableFuture.get
+    producer.produce(new ProducerRecord(partitionWithLargeMessage2.topic, partitionWithLargeMessage2.partition,
+      "larger than response limit", new String(new Array[Byte](maxResponseBytes + 1)))).toCompletableFuture.get
 
     val partitionsWithoutLargeMessages = partitionsForLeader.filterNot(partitionsWithLargeMessages.contains)
 
@@ -163,8 +163,8 @@ class FetchRequestTest extends BaseRequestTest {
     initProducer()
     val maxPartitionBytes = 200
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
-    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
-      "key", new String(new Array[Byte](maxPartitionBytes + 1)))).get
+    producer.produce(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key", new String(new Array[Byte](maxPartitionBytes + 1)))).toCompletableFuture.get
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
       Seq(topicPartition))).build(2)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
@@ -180,8 +180,8 @@ class FetchRequestTest extends BaseRequestTest {
     initProducer()
     val maxPartitionBytes = 200
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
-    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
-      "key", new String(new Array[Byte](maxPartitionBytes + 1)))).get
+    producer.produce(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key", new String(new Array[Byte](maxPartitionBytes + 1)))).toCompletableFuture.get
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
       Seq(topicPartition))).isolationLevel(IsolationLevel.READ_COMMITTED).build(4)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
@@ -357,14 +357,14 @@ class FetchRequestTest extends BaseRequestTest {
     val bytes = new Array[Byte](msgValueLen)
     val futures = try {
       (0 to 1000).map { _ =>
-        producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition, "key", bytes))
+        producer.produce(new ProducerRecord(topicPartition.topic, topicPartition.partition, "key", bytes))
       }
     } finally {
       producer.close()
     }
     // Check futures to ensure sends succeeded, but do this after close since the last
     // batch is not complete, but sent when the producer is closed
-    futures.foreach(_.get)
+    futures.foreach(_.toCompletableFuture.get)
 
     def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[FetchResponse[MemoryRecords]] = {
       val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
@@ -420,13 +420,13 @@ class FetchRequestTest extends BaseRequestTest {
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, topicConfig).head
     val topic = topicPartition.topic
 
-    val firstBatchFutures = (0 until 10).map(i => producer.send(new ProducerRecord(topic, s"key-$i", s"value-$i")))
+    val firstBatchFutures = (0 until 10).map(i => producer.produce(new ProducerRecord(topic, s"key-$i", s"value-$i")))
     producer.flush()
-    val secondBatchFutures = (10 until 25).map(i => producer.send(new ProducerRecord(topic, s"key-$i", s"value-$i")))
+    val secondBatchFutures = (10 until 25).map(i => producer.produce(new ProducerRecord(topic, s"key-$i", s"value-$i")))
     producer.flush()
 
-    firstBatchFutures.foreach(_.get)
-    secondBatchFutures.foreach(_.get)
+    firstBatchFutures.foreach(_.toCompletableFuture.get)
+    secondBatchFutures.foreach(_.toCompletableFuture.get)
 
     def check(fetchOffset: Long, requestVersion: Short, expectedOffset: Long, expectedNumBatches: Int, expectedMagic: Byte): Unit = {
       var batchesReceived = 0
@@ -545,12 +545,12 @@ class FetchRequestTest extends BaseRequestTest {
     producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)
-    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
-      "key1", "value1")).get
-    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
-      "key2", "value2")).get
-    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
-      "key3", "value3")).get
+    producer.produce(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key1", "value1")).toCompletableFuture.get
+    producer.produce(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key2", "value2")).toCompletableFuture.get
+    producer.produce(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key3", "value3")).toCompletableFuture.get
     producer.close()
 
     // fetch request with version below v10: UNSUPPORTED_COMPRESSION_TYPE error occurs
@@ -590,18 +590,18 @@ class FetchRequestTest extends BaseRequestTest {
       compressionType = GZIPCompressionCodec.name,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)
-    producer1.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
-      "key1", "value1")).get
+    producer1.produce(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key1", "value1")).toCompletableFuture.get
     producer1.close()
     // Produce ZSTD compressed messages (v2)
     val producer2 = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       compressionType = ZStdCompressionCodec.name,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)
-    producer2.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
-      "key2", "value2")).get
-    producer2.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
-      "key3", "value3")).get
+    producer2.produce(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key2", "value2")).toCompletableFuture.get
+    producer2.produce(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key3", "value3")).toCompletableFuture.get
     producer2.close()
 
     // fetch request with fetch version v1 (magic 0):
@@ -716,7 +716,7 @@ class FetchRequestTest extends BaseRequestTest {
       val suffix = s"$tp-$messageIndex"
       new ProducerRecord(tp.topic, tp.partition, s"key $suffix", s"value $suffix")
     }
-    records.map(producer.send(_).get)
+    records.map(producer.produce(_).toCompletableFuture.get)
   }
 
 }

@@ -27,7 +27,6 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -280,7 +279,17 @@ public class VerifiableProducer implements AutoCloseable {
 
         numSent++;
         try {
-            producer.send(record, new PrintInfoCallback(key, value));
+            producer.produce(record)
+                .whenComplete((recordMetadata, throwable) -> {
+                    synchronized (System.out) {
+                        if (throwable == null) {
+                            VerifiableProducer.this.numAcked++;
+                            printJson(new SuccessfulSend(key, value, recordMetadata));
+                        } else {
+                            printJson(new FailedSend(key, value, topic, throwable));
+                        }
+                    }
+                });
         } catch (Exception e) {
 
             synchronized (System.out) {
@@ -392,9 +401,9 @@ public class VerifiableProducer implements AutoCloseable {
         private String topic;
         private String key;
         private String value;
-        private Exception exception;
+        private Throwable exception;
 
-        public FailedSend(String key, String value, String topic, Exception exception) {
+        public FailedSend(String key, String value, String topic, Throwable exception) {
             assert exception != null : "Expected non-null exception.";
             this.key = key;
             this.value = value;
@@ -478,29 +487,6 @@ public class VerifiableProducer implements AutoCloseable {
             System.out.println(mapper.writeValueAsString(data));
         } catch (JsonProcessingException e) {
             System.out.println("Bad data can't be written as json: " + e.getMessage());
-        }
-    }
-
-    /** Callback which prints errors to stdout when the producer fails to send. */
-    private class PrintInfoCallback implements Callback {
-
-        private String key;
-        private String value;
-
-        PrintInfoCallback(String key, String value) {
-            this.key = key;
-            this.value = value;
-        }
-
-        public void onCompletion(RecordMetadata recordMetadata, Exception e) {
-            synchronized (System.out) {
-                if (e == null) {
-                    VerifiableProducer.this.numAcked++;
-                    printJson(new SuccessfulSend(this.key, this.value, recordMetadata));
-                } else {
-                    printJson(new FailedSend(this.key, this.value, topic, e));
-                }
-            }
         }
     }
 

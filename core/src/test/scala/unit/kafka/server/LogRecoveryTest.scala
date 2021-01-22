@@ -241,6 +241,6 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   }
 
   private def sendMessages(n: Int): Unit = {
-    (0 until n).map(_ => producer.send(new ProducerRecord(topic, 0, message))).foreach(_.get)
+    (0 until n).map(_ => producer.produce(new ProducerRecord(topic, 0, message))).foreach(_.toCompletableFuture.get)
   }
 }

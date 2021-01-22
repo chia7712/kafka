@@ -277,7 +277,7 @@ public class SustainedConnectionWorker implements TaskWorker {
                 TopicPartition partition = this.partitionsIterator.next();
                 ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
                         partition.topic(), partition.partition(), keys.next(), values.next());
-                producer.send(record).get();
+                producer.produce(record).toCompletableFuture().get();
 
             } catch (Throwable e) {
                 // Set the producer to be recreated on the next cycle.

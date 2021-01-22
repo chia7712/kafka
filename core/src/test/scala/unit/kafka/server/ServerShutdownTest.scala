@@ -85,7 +85,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
 
     // send some messages
-    sent1.map(value => producer.send(new ProducerRecord(topic, 0, value))).foreach(_.get)
+    sent1.map(value => producer.produce(new ProducerRecord(topic, 0, value))).foreach(_.toCompletableFuture.get)
 
     // do a clean shutdown and check that offset checkpoint file exists
     server.shutdown()
@@ -111,7 +111,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     assertEquals(sent1, consumerRecords.map(_.value))
 
     // send some more messages
-    sent2.map(value => producer.send(new ProducerRecord(topic, 0, value))).foreach(_.get)
+    sent2.map(value => producer.produce(new ProducerRecord(topic, 0, value))).foreach(_.toCompletableFuture.get)
 
     val consumerRecords2 = TestUtils.consumeRecords(consumer, sent2.size)
     assertEquals(sent2, consumerRecords2.map(_.value))

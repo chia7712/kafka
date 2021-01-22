@@ -28,6 +28,7 @@ import java.io.Closeable;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -72,13 +73,22 @@ public interface Producer<K, V> extends Closeable {
 
     /**
      * See {@link KafkaProducer#send(ProducerRecord)}
+     * @deprecated Use {@link #produce(ProducerRecord)}} instead
      */
+    @Deprecated
     Future<RecordMetadata> send(ProducerRecord<K, V> record);
 
     /**
      * See {@link KafkaProducer#send(ProducerRecord, Callback)}
+     * @deprecated Use {@link #produce(ProducerRecord)}} instead
      */
+    @Deprecated
     Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback);
+
+    /**
+     * See {@link KafkaProducer#produce(ProducerRecord)}
+     */
+    CompletionStage<RecordMetadata> produce(ProducerRecord<K, V> record);
 
     /**
      * See {@link KafkaProducer#flush()}

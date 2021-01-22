@@ -431,7 +431,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                         );
                         c++;
                     }
-                    producer.send(producerRecord);
+                    producer.produce(producerRecord);
                     producer.flush();
                     LOG.info("sent {} {}", producerRecord.topic(), producerRecord.key());
                     Thread.sleep(pauseTime);

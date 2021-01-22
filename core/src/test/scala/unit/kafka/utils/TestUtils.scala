@@ -1110,8 +1110,8 @@ object TestUtils extends Logging {
                       acks: Int = -1): Unit = {
     val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = acks)
     try {
-      val futures = records.map(producer.send)
-      futures.foreach(_.get)
+      val futures = records.map(producer.produce)
+      futures.foreach(_.toCompletableFuture.get)
     } finally {
       producer.close()
     }
@@ -1138,7 +1138,7 @@ object TestUtils extends Logging {
     val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers),
       deliveryTimeoutMs = deliveryTimeoutMs, requestTimeoutMs = requestTimeoutMs)
     try {
-      producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
+      producer.produce(new ProducerRecord(topic, topic.getBytes, message.getBytes)).toCompletableFuture.get
     } finally {
       producer.close()
     }
@@ -1469,7 +1469,7 @@ object TestUtils extends Logging {
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
     try {
       for (i <- 0 until numRecords) {
-        producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, asBytes(i.toString), asBytes(i.toString)))
+        producer.produce(new ProducerRecord[Array[Byte], Array[Byte]](topic, asBytes(i.toString), asBytes(i.toString)))
       }
       producer.flush()
     } finally {

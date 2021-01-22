@@ -90,7 +90,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   def testV1FetchWithDownConversionDisabled(): Unit = {
     val topicMap = createTopics(numTopics = 5, numPartitions = 1)
     val topicPartitions = topicMap.keySet.toSeq
-    topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
+    topicPartitions.foreach(tp => producer.produce(new ProducerRecord(tp.topic(), "key", "value")).toCompletableFuture.get())
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
       topicPartitions)).build(1)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
@@ -104,7 +104,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   def testLatestFetchWithDownConversionDisabled(): Unit = {
     val topicMap = createTopics(numTopics = 5, numPartitions = 1)
     val topicPartitions = topicMap.keySet.toSeq
-    topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
+    topicPartitions.foreach(tp => producer.produce(new ProducerRecord(tp.topic(), "key", "value")).toCompletableFuture.get())
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
       topicPartitions)).build()
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
@@ -129,7 +129,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val allTopics = conversionDisabledTopicPartitions ++ conversionEnabledTopicPartitions
     val leaderId = conversionDisabledTopicsMap.head._2
 
-    allTopics.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
+    allTopics.foreach(tp => producer.produce(new ProducerRecord(tp.topic(), "key", "value")).toCompletableFuture.get())
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
       allTopics)).build(1)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
@@ -155,7 +155,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val allTopicPartitions = conversionDisabledTopicPartitions ++ conversionEnabledTopicPartitions
     val leaderId = conversionDisabledTopicsMap.head._2
 
-    allTopicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
+    allTopicPartitions.foreach(tp => producer.produce(new ProducerRecord(tp.topic(), "key", "value")).toCompletableFuture.get())
     val fetchRequest = FetchRequest.Builder.forReplica(1, 1, Int.MaxValue, 0,
       createPartitionMap(1024, allTopicPartitions)).build()
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)

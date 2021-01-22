@@ -318,7 +318,7 @@ public class KafkaProducerTest {
         final AtomicReference<Exception> closeException = new AtomicReference<>();
         try {
             Future<?> future = executor.submit(() -> {
-                producer.send(new ProducerRecord<>("topic", "key", "value"));
+                producer.produce(new ProducerRecord<>("topic", "key", "value"));
                 try {
                     producer.close();
                     fail("Close should block and throw.");
@@ -403,7 +403,7 @@ public class KafkaProducerTest {
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata);
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
-        producer.send(record);
+        producer.produce(record);
 
         // One request update for each empty cluster returned
         verify(metadata, times(4)).requestUpdateForTopic(topic);
@@ -411,7 +411,7 @@ public class KafkaProducerTest {
         verify(metadata, times(5)).fetch();
 
         // Should not request update for subsequent `send`
-        producer.send(record, null);
+        producer.produce(record);
         verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(6)).fetch();
@@ -441,7 +441,7 @@ public class KafkaProducerTest {
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata);
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
-        producer.send(record);
+        producer.produce(record);
 
         // Verify the topic's metadata isn't requested since it's already present.
         verify(metadata, times(0)).requestUpdateForTopic(topic);
@@ -449,7 +449,7 @@ public class KafkaProducerTest {
         verify(metadata, times(1)).fetch();
 
         // The metadata has been expired. Verify the producer requests the topic's metadata.
-        producer.send(record, null);
+        producer.produce(record);
         verify(metadata, times(1)).requestUpdateForTopic(topic);
         verify(metadata, times(1)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(3)).fetch();
@@ -482,7 +482,7 @@ public class KafkaProducerTest {
 
         // Four request updates where the topic isn't present, at which point the timeout expires and a
         // TimeoutException is thrown
-        Future<RecordMetadata> future = producer.send(record);
+        Future<RecordMetadata> future = producer.produce(record).toCompletableFuture();
         verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
@@ -511,7 +511,7 @@ public class KafkaProducerTest {
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata, mockTime);
         // One request update if metadata is available but outdated for the given record
-        producer.send(record);
+        producer.produce(record);
         verify(metadata, times(2)).requestUpdateForTopic(topic);
         verify(metadata, times(2)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(3)).fetch();
@@ -544,7 +544,7 @@ public class KafkaProducerTest {
 
         // Four request updates where the requested partition is out of range, at which point the timeout expires
         // and a TimeoutException is thrown
-        Future<RecordMetadata> future = producer.send(record);
+        Future<RecordMetadata> future = producer.produce(record).toCompletableFuture();
         verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
@@ -680,7 +680,7 @@ public class KafkaProducerTest {
 
         //ensure headers can be mutated pre send.
         record.headers().add(new RecordHeader("test", "header2".getBytes()));
-        producer.send(record, null);
+        producer.produce(record);
 
         //ensure headers are closed and cannot be mutated post send
         assertThrows(IllegalStateException.class, () -> record.headers().add(new RecordHeader("test", "test".getBytes())));
@@ -726,9 +726,10 @@ public class KafkaProducerTest {
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time)) {
+
             ArrayList<Future<RecordMetadata>> futureResponses = new ArrayList<>();
             for (int i = 0; i < 50; i++) {
-                Future<RecordMetadata> response = producer.send(new ProducerRecord<>("topic", "value" + i));
+                Future<RecordMetadata> response = producer.produce(new ProducerRecord<>("topic", "value" + i)).toCompletableFuture();
                 futureResponses.add(response);
             }
             futureResponses.forEach(res -> assertFalse(res.isDone()));
@@ -772,7 +773,7 @@ public class KafkaProducerTest {
 
         when(interceptors.onSend(any())).then(invocation -> invocation.getArgument(0));
 
-        producer.send(record);
+        producer.produce(record);
 
         verify(interceptors).onSend(record);
         verify(interceptors).onSendError(eq(record), notNull(), notNull());
@@ -1094,7 +1095,7 @@ public class KafkaProducerTest {
                 topicMetadata);
         client.prepareMetadataUpdate(updateResponse);
 
-        Future<RecordMetadata> future = producer.send(record);
+        Future<RecordMetadata> future = producer.produce(record).toCompletableFuture();
 
         assertEquals(Collections.singleton(invalidTopicName),
                 metadata.fetch().invalidTopics(), "Cluster has incorrect invalid topic list.");
@@ -1131,7 +1132,7 @@ public class KafkaProducerTest {
                 try {
                     // Metadata for topic "test" will not be available which will cause us to block indefinitely until
                     // KafkaProducer#close is invoked.
-                    producer.send(new ProducerRecord<>(topicName, "key", "value"));
+                    producer.produce(new ProducerRecord<>(topicName, "key", "value"));
                     fail();
                 } catch (Exception e) {
                     sendException.set(e);

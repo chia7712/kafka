@@ -172,7 +172,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
         final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
 
-        streamsProducer.send(serializedRecord, (metadata, exception) -> {
+        streamsProducer.send(serializedRecord).whenComplete((metadata, exception) -> {
             // if there's already an exception record, skip logging offsets or new exceptions
             if (sendException.get() != null) {
                 return;
@@ -194,7 +194,7 @@ public class RecordCollectorImpl implements RecordCollector {
         });
     }
 
-    private void recordSendError(final String topic, final Exception exception, final ProducerRecord<byte[], byte[]> serializedRecord) {
+    private void recordSendError(final String topic, final Throwable exception, final ProducerRecord<byte[], byte[]> serializedRecord) {
         String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception.toString());
 
         if (isFatalException(exception)) {
@@ -218,7 +218,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
             }
 
-            if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
+            if (productionExceptionHandler.handle(serializedRecord, (Exception) exception) == ProductionExceptionHandlerResponse.FAIL) {
                 errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
                 sendException.set(new StreamsException(errorMessage, exception));
             } else {
@@ -230,7 +230,7 @@ public class RecordCollectorImpl implements RecordCollector {
         log.error(errorMessage);
     }
 
-    private boolean isFatalException(final Exception exception) {
+    private boolean isFatalException(final Throwable exception) {
         final boolean securityException = exception instanceof AuthenticationException ||
             exception instanceof AuthorizationException ||
             exception instanceof SecurityDisabledException;

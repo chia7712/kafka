@@ -266,7 +266,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       )
       try {
         while (running.get) {
-          val future = producer.send(new ProducerRecord(topic, s"xxxxxxxxxxxxxxxxxxxx-$numMessages".getBytes))
+          val future = producer.produce(new ProducerRecord(topic, s"xxxxxxxxxxxxxxxxxxxx-$numMessages".getBytes)).toCompletableFuture
           numMessages.incrementAndGet()
           future.get(10, TimeUnit.SECONDS)
         }
@@ -841,7 +841,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val futures = (0 until numRecords).map( i => {
       val record = new ProducerRecord(topicPartition.topic, topicPartition.partition, s"$i".getBytes, s"$i".getBytes)
       debug(s"Sending this record: $record")
-      producer.send(record)
+      producer.produce(record).toCompletableFuture
     })
 
     futures.foreach(_.get)
@@ -967,7 +967,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       val producer = createProducer()
       try {
-        producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
+        producer.produce(new ProducerRecord(testTopicName, 0, null, null)).toCompletableFuture.get()
       } finally {
         Utils.closeQuietly(producer, "producer")
       }
@@ -1181,7 +1181,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       val producer = createProducer()
       try {
-        producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
+        producer.produce(new ProducerRecord(testTopicName, 0, null, null)).toCompletableFuture.get()
       } finally {
         Utils.closeQuietly(producer, "producer")
       }

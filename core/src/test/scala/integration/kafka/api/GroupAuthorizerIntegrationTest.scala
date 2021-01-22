@@ -100,7 +100,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
 
     val producer = createProducer()
     val produceException = assertThrows(classOf[ExecutionException],
-      () => producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).get()).getCause
+      () => producer.produce(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).toCompletableFuture.get()).getCause
     assertTrue(produceException.isInstanceOf[TopicAuthorizationException])
     assertEquals(Set(topic), produceException.asInstanceOf[TopicAuthorizationException].unauthorizedTopics.asScala)
 
@@ -122,7 +122,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
       Set(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW)),
       new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL))
     val producer = createProducer()
-    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).get()
+    producer.produce(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).toCompletableFuture.get()
 
     TestUtils.addAndVerifyAcls(servers.head,
       Set(createAcl(AclOperation.READ, AclPermissionType.ALLOW)),

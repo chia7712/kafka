@@ -246,9 +246,9 @@ public class ClientCompatibilityTest {
         ByteArraySerializer serializer = new ByteArraySerializer();
         KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps, serializer, serializer);
         ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(testConfig.topic, message1);
-        Future<RecordMetadata> future1 = producer.send(record1);
+        Future<RecordMetadata> future1 = producer.produce(record1).toCompletableFuture();
         ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(testConfig.topic, message2);
-        Future<RecordMetadata> future2 = producer.send(record2);
+        Future<RecordMetadata> future2 = producer.produce(record2).toCompletableFuture();
         producer.flush();
         future1.get();
         future2.get();

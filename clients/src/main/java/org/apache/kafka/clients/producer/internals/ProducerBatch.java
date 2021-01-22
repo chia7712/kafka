@@ -16,9 +16,8 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.header.Header;
@@ -32,7 +31,6 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ProduceResponse;
-import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -100,7 +99,7 @@ public final class ProducerBatch {
      *
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
-    public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
+    public Thunk tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, long now) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return null;
         } else {
@@ -108,16 +107,16 @@ public final class ProducerBatch {
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
                     recordsBuilder.compressionType(), key, value, headers));
             this.lastAppendTime = now;
-            FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
-                                                                   timestamp, checksum,
-                                                                   key == null ? -1 : key.length,
-                                                                   value == null ? -1 : value.length,
-                                                                   Time.SYSTEM);
+            CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+            Thunk thunk = new Thunk(future, this.produceFuture, this.recordCount,
+                                   timestamp, checksum,
+                                   key == null ? -1 : key.length,
+                                   value == null ? -1 : value.length);
             // we have to keep every future returned to the users in case the batch needs to be
             // split to several new batches and resent.
-            thunks.add(new Thunk(callback, future));
+            thunks.add(thunk);
             this.recordCount++;
-            return future;
+            return thunk;
         }
     }
 
@@ -125,7 +124,7 @@ public final class ProducerBatch {
      * This method is only used by {@link #split(int)} when splitting a large batch to smaller ones.
      * @return true if the record has been successfully appended, false otherwise.
      */
-    private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
+    private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk parent) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return false;
         } else {
@@ -133,13 +132,10 @@ public final class ProducerBatch {
             this.recordsBuilder.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
                     recordsBuilder.compressionType(), key, value, headers));
-            FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
-                                                                   timestamp, thunk.future.checksumOrNull(),
-                                                                   key == null ? -1 : key.remaining(),
-                                                                   value == null ? -1 : value.remaining(),
-                                                                   Time.SYSTEM);
-            // Chain the future to the original thunk.
-            thunk.future.chain(future);
+            Thunk thunk = new Thunk(parent.future, this.produceFuture, this.recordCount,
+                                       timestamp, parent.checksum,
+                                       key == null ? -1 : key.remaining(),
+                                       value == null ? -1 : value.remaining());
             this.thunks.add(thunk);
             this.recordCount++;
             return true;
@@ -222,14 +218,7 @@ public final class ProducerBatch {
         // execute callbacks
         for (Thunk thunk : thunks) {
             try {
-                if (exception == null) {
-                    RecordMetadata metadata = thunk.future.value();
-                    if (thunk.callback != null)
-                        thunk.callback.onCompletion(metadata, null);
-                } else {
-                    if (thunk.callback != null)
-                        thunk.callback.onCompletion(null, exception);
-                }
+                thunk.done();
             } catch (Exception e) {
                 log.error("Error executing user-provided callback on message for topic-partition '{}'", topicPartition, e);
             }
@@ -309,19 +298,6 @@ public final class ProducerBatch {
 
     public boolean isCompressed() {
         return recordsBuilder.compressionType() != CompressionType.NONE;
-    }
-
-    /**
-     * A callback and the associated FutureRecordMetadata argument to pass to it.
-     */
-    final private static class Thunk {
-        final Callback callback;
-        final FutureRecordMetadata future;
-
-        Thunk(Callback callback, FutureRecordMetadata future) {
-            this.callback = callback;
-            this.future = future;
-        }
     }
 
     @Override

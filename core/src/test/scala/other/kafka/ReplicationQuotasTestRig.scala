@@ -143,7 +143,7 @@ object ReplicationQuotasTestRig {
       val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = 0)
       (0 until config.msgsPerPartition).foreach { x =>
         (0 until config.partitions).foreach { partition =>
-          producer.send(new ProducerRecord(topicName, partition, null, new Array[Byte](config.msgSize)))
+          producer.produce(new ProducerRecord(topicName, partition, null, new Array[Byte](config.msgSize)))
         }
       }
 

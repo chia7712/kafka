@@ -178,7 +178,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       val endTimeMs = System.currentTimeMillis + 20000
       while (remainingRecords > 0 && System.currentTimeMillis < endTimeMs) {
         val futures = (0 until remainingRecords).map { i =>
-          producer.send(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes))
+          producer.produce(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes)).toCompletableFuture
         }
         futures.map { future =>
           try {
@@ -528,7 +528,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }
 
     val futures = (0 until numRecords).map { i =>
-      producer.send(new ProducerRecord(topic, getPartition, i.toString.getBytes, i.toString.getBytes))
+      producer.produce(new ProducerRecord(topic, getPartition, i.toString.getBytes, i.toString.getBytes)).toCompletableFuture
     }
     futures.map(_.get)
   }

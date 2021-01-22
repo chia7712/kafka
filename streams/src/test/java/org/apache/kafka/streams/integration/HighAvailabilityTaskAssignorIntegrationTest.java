@@ -240,7 +240,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
         try (final Producer<String, String> producer = new KafkaProducer<>(producerProperties)) {
             for (int i = 0; i < numberOfRecords; i++) {
-                producer.send(new ProducerRecord<>(inputTopic, String.valueOf(i), kilo));
+                producer.produce(new ProducerRecord<>(inputTopic, String.valueOf(i), kilo));
             }
         }
     }

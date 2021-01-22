@@ -32,8 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -160,16 +159,11 @@ public class KafkaLog4jAppenderTest {
 
     private void replaceProducerWithMocked(MockKafkaLog4jAppender mockKafkaLog4jAppender, boolean success) {
         MockProducer<byte[], byte[]> producer = EasyMock.niceMock(MockProducer.class);
-        Future<RecordMetadata> futureMock = EasyMock.niceMock(Future.class);
-        try {
-            if (!success)
-                EasyMock.expect(futureMock.get())
-                    .andThrow(new ExecutionException("simulated timeout", new TimeoutException()));
-        } catch (InterruptedException | ExecutionException e) {
-            // just mocking
-        }
-        EasyMock.expect(producer.send(EasyMock.anyObject())).andReturn(futureMock);
-        EasyMock.replay(producer, futureMock);
+        CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+        if (success) future.complete(null);
+        else future.completeExceptionally(new TimeoutException());
+        EasyMock.expect(producer.produce(EasyMock.anyObject())).andReturn(future);
+        EasyMock.replay(producer);
         // reconfiguring mock appender
         mockKafkaLog4jAppender.setKafkaProducer(producer);
         mockKafkaLog4jAppender.activateOptions();

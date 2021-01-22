@@ -83,7 +83,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     val tp = new TopicPartition(topic, 0)
 
     //When one record is written to the leader
-    producer.send(new ProducerRecord(topic, 0, null, msg)).get
+    producer.produce(new ProducerRecord(topic, 0, null, msg)).toCompletableFuture.get
 
     //The message should have epoch 0 stamped onto it in both leader and follower
     assertEquals(0, latestRecord(leader).partitionLeaderEpoch)
@@ -102,7 +102,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     assertEquals(Buffer(EpochEntry(0, 0)), epochCache(follower).epochEntries)
 
     //Send a message
-    producer.send(new ProducerRecord(topic, 0, null, msg)).get
+    producer.produce(new ProducerRecord(topic, 0, null, msg)).toCompletableFuture.get
 
     //Epoch1 should now propagate to the follower with the written message
     assertEquals(Buffer(EpochEntry(0, 0), EpochEntry(1, 1)), epochCache(leader).epochEntries)
@@ -121,7 +121,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     assertEquals(Buffer(EpochEntry(0, 0), EpochEntry(1, 1)), epochCache(follower).epochEntries)
 
     //Send a message
-    producer.send(new ProducerRecord(topic, 0, null, msg)).get
+    producer.produce(new ProducerRecord(topic, 0, null, msg)).toCompletableFuture.get
 
     //This should case epoch 2 to propagate to the follower
     assertEquals(2, latestRecord(leader).partitionLeaderEpoch())
@@ -145,7 +145,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Write 10 messages (ensure they are not batched so we can truncate in the middle below)
     (0 until 10).foreach { i =>
-      producer.send(new ProducerRecord(topic, 0, s"$i".getBytes, msg)).get()
+      producer.produce(new ProducerRecord(topic, 0, s"$i".getBytes, msg)).toCompletableFuture.get()
     }
 
     //Stop the brokers (broker 101 first so that 100 is the leader)
@@ -167,8 +167,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Write ten additional messages
     (11 until 20).map { i =>
-      producer.send(new ProducerRecord(topic, 0, s"$i".getBytes, msg))
-    }.foreach(_.get())
+      producer.produce(new ProducerRecord(topic, 0, s"$i".getBytes, msg))
+    }.foreach(_.toCompletableFuture.get())
 
     //Start broker 101 (we expect it to truncate to match broker 100's log)
     broker101.startup()
@@ -192,7 +192,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Write 100 messages
     (0 until 100).foreach { i =>
-      producer.send(new ProducerRecord(topic, 0, null, msg))
+      producer.produce(new ProducerRecord(topic, 0, null, msg))
       producer.flush()
     }
 
@@ -215,11 +215,11 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     //Write two large batches of messages. This will ensure that the LeO of the follower's log aligns with the middle
     //of the a compressed message set in the leader (which, when forwarded, will result in offsets going backwards)
     (0 until 77).foreach { _ =>
-      producer.send(new ProducerRecord(topic, 0, null, msg))
+      producer.produce(new ProducerRecord(topic, 0, null, msg))
     }
     producer.flush()
     (0 until 77).foreach { _ =>
-      producer.send(new ProducerRecord(topic, 0, null, msg))
+      producer.produce(new ProducerRecord(topic, 0, null, msg))
     }
     producer.flush()
 
@@ -266,7 +266,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     producer = createProducer
 
     //Kick off with a single record
-    producer.send(new ProducerRecord(topic, 0, null, msg)).get
+    producer.produce(new ProducerRecord(topic, 0, null, msg)).toCompletableFuture.get
     var messagesWritten = 1
 
     //Now invoke the fast leader change bug
@@ -275,7 +275,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
       val leader = brokers.filter(_.config.brokerId == leaderId)(0)
       val follower = brokers.filter(_.config.brokerId != leaderId)(0)
 
-      producer.send(new ProducerRecord(topic, 0, null, msg)).get
+      producer.produce(new ProducerRecord(topic, 0, null, msg)).toCompletableFuture.get
       messagesWritten += 1
 
       //As soon as it replicates, bounce the follower
@@ -309,7 +309,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     // Write one message while both brokers are up
     (0 until 1).foreach { i =>
-      producer.send(new ProducerRecord(topic, 0, null, msg))
+      producer.produce(new ProducerRecord(topic, 0, null, msg))
       producer.flush()}
 
     // Since we use producer with acks = 1, make sure that logs match for the first epoch
@@ -320,7 +320,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Write 1 message
     (0 until 1).foreach { i =>
-      producer.send(new ProducerRecord(topic, 0, null, msg))
+      producer.produce(new ProducerRecord(topic, 0, null, msg))
       producer.flush()}
 
     brokers(1).shutdown()
@@ -332,7 +332,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Write 3 messages
     (0 until 3).foreach { i =>
-      producer.send(new ProducerRecord(topic, 0, null, msgBigger))
+      producer.produce(new ProducerRecord(topic, 0, null, msgBigger))
       producer.flush()}
 
     brokers(0).shutdown()
@@ -344,7 +344,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Write 1 message
     (0 until 1).foreach { i =>
-      producer.send(new ProducerRecord(topic, 0, null, msg))
+      producer.produce(new ProducerRecord(topic, 0, null, msg))
       producer.flush()}
 
     brokers(1).shutdown()
@@ -356,7 +356,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Write 2 messages
     (0 until 2).foreach { i =>
-      producer.send(new ProducerRecord(topic, 0, null, msgBigger))
+      producer.produce(new ProducerRecord(topic, 0, null, msgBigger))
       producer.flush()}
 
     printSegments()

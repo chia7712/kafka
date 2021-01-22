@@ -42,6 +42,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -158,11 +159,13 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     @Override
     public Future<Void> set(final Map<ByteBuffer, ByteBuffer> values, final Callback<Void> callback) {
         SetCallbackFuture producerCallback = new SetCallbackFuture(values.size(), callback);
-
+        System.out.println("[CHIA] set values.entrySet().size: " + values.entrySet().size());
         for (Map.Entry<ByteBuffer, ByteBuffer> entry : values.entrySet()) {
             ByteBuffer key = entry.getKey();
             ByteBuffer value = entry.getValue();
-            offsetLog.send(key == null ? null : key.array(), value == null ? null : value.array(), producerCallback);
+            CompletionStage<RecordMetadata> f = offsetLog.send(key == null ? null : key.array(), value == null ? null : value.array());
+            System.out.println("[CHIA] f.name: " + f.toString());
+            f.whenComplete(producerCallback::onCompletion);
         }
 
         return producerCallback;
@@ -177,7 +180,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         }
     };
 
-    private static class SetCallbackFuture implements org.apache.kafka.clients.producer.Callback, Future<Void> {
+    private static class SetCallbackFuture implements Future<Void> {
         private int numLeft;
         private boolean completed = false;
         private Throwable exception = null;
@@ -188,8 +191,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
             this.callback = callback;
         }
 
-        @Override
-        public synchronized void onCompletion(RecordMetadata metadata, Exception exception) {
+        public synchronized void onCompletion(RecordMetadata metadata, Throwable exception) {
             if (exception != null) {
                 if (!completed) {
                     this.exception = exception;

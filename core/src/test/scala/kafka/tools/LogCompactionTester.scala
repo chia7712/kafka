@@ -281,7 +281,7 @@ object LogCompactionTester {
             new ProducerRecord[Array[Byte], Array[Byte]](topic, key.toString.getBytes(UTF_8), null)
           else
             new ProducerRecord(topic, key.toString.getBytes(UTF_8), i.toString.getBytes(UTF_8))
-        producer.send(msg)
+        producer.produce(msg)
         producedWriter.write(TestRecord(topic, key, i, delete).toString)
         producedWriter.newLine()
       }

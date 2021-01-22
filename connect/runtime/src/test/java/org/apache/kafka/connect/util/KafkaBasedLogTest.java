@@ -36,7 +36,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.MockTime;
-import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
@@ -56,6 +55,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -263,14 +263,14 @@ public class KafkaBasedLogTest {
     @Test
     public void testSendAndReadToEnd() throws Exception {
         expectStart();
-        TestFuture<RecordMetadata> tp0Future = new TestFuture<>();
+
         ProducerRecord<String, String> tp0Record = new ProducerRecord<>(TOPIC, TP0_KEY, TP0_VALUE);
-        Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
-        EasyMock.expect(producer.send(EasyMock.eq(tp0Record), EasyMock.capture(callback0))).andReturn(tp0Future);
-        TestFuture<RecordMetadata> tp1Future = new TestFuture<>();
+        CompletableFuture<RecordMetadata> future0 = new CompletableFuture<>();
+        EasyMock.expect(producer.produce(EasyMock.eq(tp0Record))).andReturn(future0);
+
         ProducerRecord<String, String> tp1Record = new ProducerRecord<>(TOPIC, TP1_KEY, TP1_VALUE);
-        Capture<org.apache.kafka.clients.producer.Callback> callback1 = EasyMock.newCapture();
-        EasyMock.expect(producer.send(EasyMock.eq(tp1Record), EasyMock.capture(callback1))).andReturn(tp1Future);
+        CompletableFuture<RecordMetadata> future1 = new CompletableFuture<>();
+        EasyMock.expect(producer.produce(EasyMock.eq(tp1Record))).andReturn(future1);
 
         // Producer flushes when read to log end is called
         producer.flush();
@@ -291,20 +291,12 @@ public class KafkaBasedLogTest {
 
         // Set some keys
         final AtomicInteger invoked = new AtomicInteger(0);
-        org.apache.kafka.clients.producer.Callback producerCallback = new org.apache.kafka.clients.producer.Callback() {
-            @Override
-            public void onCompletion(RecordMetadata metadata, Exception exception) {
-                invoked.incrementAndGet();
-            }
-        };
-        store.send(TP0_KEY, TP0_VALUE, producerCallback);
-        store.send(TP1_KEY, TP1_VALUE, producerCallback);
+        store.send(TP0_KEY, TP0_VALUE).whenComplete((metadata, exception) -> invoked.incrementAndGet());
+        store.send(TP1_KEY, TP1_VALUE).whenComplete((metadata, exception) -> invoked.incrementAndGet());
         assertEquals(0, invoked.get());
-        tp1Future.resolve((RecordMetadata) null); // Output not used, so safe to not return a real value for testing
-        callback1.getValue().onCompletion(null, null);
+        future1.complete(null); // Output not used, so safe to not return a real value for testing
         assertEquals(1, invoked.get());
-        tp0Future.resolve((RecordMetadata) null);
-        callback0.getValue().onCompletion(null, null);
+        future0.complete(null);
         assertEquals(2, invoked.get());
 
         // Now we should have to wait for the records to be read back when we call readToEnd()
@@ -498,10 +490,10 @@ public class KafkaBasedLogTest {
     @Test
     public void testProducerError() throws Exception {
         expectStart();
-        TestFuture<RecordMetadata> tp0Future = new TestFuture<>();
+
         ProducerRecord<String, String> tp0Record = new ProducerRecord<>(TOPIC, TP0_KEY, TP0_VALUE);
-        Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
-        EasyMock.expect(producer.send(EasyMock.eq(tp0Record), EasyMock.capture(callback0))).andReturn(tp0Future);
+        CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+        EasyMock.expect(producer.produce(EasyMock.eq(tp0Record))).andReturn(future);
 
         expectStop();
 
@@ -517,16 +509,13 @@ public class KafkaBasedLogTest {
         assertEquals(0L, consumer.position(TP1));
 
         final AtomicReference<Throwable> setException = new AtomicReference<>();
-        store.send(TP0_KEY, TP0_VALUE, new org.apache.kafka.clients.producer.Callback() {
-            @Override
-            public void onCompletion(RecordMetadata metadata, Exception exception) {
+        store.send(TP0_KEY, TP0_VALUE)
+            .whenComplete((recordMetadata, throwable) -> {
                 assertNull(setException.get()); // Should only be invoked once
-                setException.set(exception);
-            }
-        });
+                setException.set(throwable);
+            });
         KafkaException exc = new LeaderNotAvailableException("Error");
-        tp0Future.resolve(exc);
-        callback0.getValue().onCompletion(null, exc);
+        future.completeExceptionally(exc);
         assertNotNull(setException.get());
 
         store.stop();

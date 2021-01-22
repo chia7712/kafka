@@ -252,7 +252,7 @@ public class RoundTripWorker implements TaskWorker {
                     ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(partition.topic(),
                         partition.partition(), KEY_GENERATOR.generate(messageIndex),
                         spec.valueGenerator().generate(messageIndex));
-                    producer.send(record, (metadata, exception) -> {
+                    producer.produce(record).whenComplete((metadata, exception) -> {
                         if (exception == null) {
                             lock.lock();
                             try {

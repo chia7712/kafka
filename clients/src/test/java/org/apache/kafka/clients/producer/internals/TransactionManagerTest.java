@@ -186,7 +186,7 @@ public class TransactionManagerTest {
 
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
-        FutureRecordMetadata sendFuture = appendToAccumulator(tp0);
+        Future<RecordMetadata> sendFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
         prepareProduceResponse(Errors.NONE, producerId, epoch);
@@ -709,7 +709,7 @@ public class TransactionManagerTest {
                 CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         long currentTimeMs = time.milliseconds();
         ProducerBatch batch = new ProducerBatch(tp, builder, currentTimeMs);
-        batch.tryAppend(currentTimeMs, new byte[0], value.getBytes(), new Header[0], null, currentTimeMs);
+        batch.tryAppend(currentTimeMs, new byte[0], value.getBytes(), new Header[0], currentTimeMs);
         return batch;
     }
 
@@ -1207,8 +1207,8 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp1);
 
-        FutureRecordMetadata firstPartitionAppend = appendToAccumulator(tp0);
-        FutureRecordMetadata secondPartitionAppend = appendToAccumulator(tp1);
+        Future<RecordMetadata> firstPartitionAppend = appendToAccumulator(tp0);
+        Future<RecordMetadata> secondPartitionAppend = appendToAccumulator(tp1);
 
         Map<TopicPartition, Errors> errors = new HashMap<>();
         errors.put(tp0, Errors.TOPIC_AUTHORIZATION_FAILED);
@@ -1244,8 +1244,8 @@ public class TransactionManagerTest {
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
         transactionManager.maybeAddPartitionToTransaction(tp1);
-        FutureRecordMetadata firstPartitionAppend = appendToAccumulator(tp0);
-        FutureRecordMetadata secondPartitionAppend = appendToAccumulator(tp1);
+        Future<RecordMetadata> firstPartitionAppend = appendToAccumulator(tp0);
+        Future<RecordMetadata> secondPartitionAppend = appendToAccumulator(tp1);
         TransactionalRequestResult commitResult = transactionManager.beginCommit();
 
         // We send the AddPartitionsToTxn request in the first sender call
@@ -1365,7 +1365,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        FutureRecordMetadata nextTransactionFuture = appendToAccumulator(tp0);
+        Future<RecordMetadata> nextTransactionFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
         runUntil(() -> transactionManager.isPartitionAdded(tp0));
@@ -1430,7 +1430,7 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        FutureRecordMetadata nextTransactionFuture = appendToAccumulator(tp0);
+        Future<RecordMetadata> nextTransactionFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
         runUntil(() -> transactionManager.isPartitionAdded(tp0));
@@ -3280,10 +3280,9 @@ public class TransactionManagerTest {
         assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
     }
 
-    private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
+    private Future<RecordMetadata> appendToAccumulator(TopicPartition tp) throws InterruptedException {
         final long nowMs = time.milliseconds();
-        return accumulator.append(tp, nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS,
-                null, MAX_BLOCK_TIMEOUT, false, nowMs).future;
+        return accumulator.append(tp, nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, MAX_BLOCK_TIMEOUT, false, nowMs).future();
     }
 
     private void verifyCommitOrAbortTransactionRetriable(TransactionResult firstTransactionResult,

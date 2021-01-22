@@ -19,7 +19,6 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
-import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -30,7 +29,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Time;
 
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -40,6 +38,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Future;
 
 /**
@@ -276,6 +276,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
      * 
      * @see #history()
      */
+    @Deprecated
     @Override
     public synchronized Future<RecordMetadata> send(ProducerRecord<K, V> record) {
         return send(record, null);
@@ -286,8 +287,19 @@ public class MockProducer<K, V> implements Producer<K, V> {
      *
      * @see #history()
      */
+    @Deprecated
     @Override
-    public synchronized Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
+    public synchronized Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback userCallback) {
+        return doSend(record, userCallback);
+    }
+
+    @Override
+    public synchronized CompletionStage<RecordMetadata> produce(ProducerRecord<K, V> record) {
+        return doSend(record, null);
+    }
+
+    @SuppressWarnings("deprecation")
+    private CompletableFuture<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback userCallback) {
         if (this.closed) {
             throw new IllegalStateException("MockProducer is already closed.");
         }
@@ -307,14 +319,18 @@ public class MockProducer<K, V> implements Producer<K, V> {
             keySerializer.serialize(record.topic(), record.key());
             valueSerializer.serialize(record.topic(), record.value());
         }
-            
+
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
         ProduceRequestResult result = new ProduceRequestResult(topicPartition);
-        FutureRecordMetadata future = new FutureRecordMetadata(result, 0, RecordBatch.NO_TIMESTAMP,
-                0L, 0, 0, Time.SYSTEM);
         long offset = nextOffset(topicPartition);
+
+        CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+        future.whenComplete((recordMetadata, throwable) -> {
+            if (userCallback != null) userCallback.onCompletion(recordMetadata, (Exception) throwable);
+        });
+
         Completion completion = new Completion(offset, new RecordMetadata(topicPartition, 0, offset,
-                RecordBatch.NO_TIMESTAMP, 0L, 0, 0), result, callback);
+                RecordBatch.NO_TIMESTAMP, 0L, 0, 0), result, future);
 
         if (!this.transactionInFlight)
             this.sent.add(record);
@@ -508,29 +524,25 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     private static class Completion {
+        private final CompletableFuture<RecordMetadata> future;
         private final long offset;
         private final RecordMetadata metadata;
         private final ProduceRequestResult result;
-        private final Callback callback;
 
         public Completion(long offset,
                           RecordMetadata metadata,
                           ProduceRequestResult result,
-                          Callback callback) {
+                          CompletableFuture<RecordMetadata> future) {
             this.metadata = metadata;
             this.offset = offset;
             this.result = result;
-            this.callback = callback;
+            this.future = future;
         }
 
         public void complete(RuntimeException e) {
             result.set(e == null ? offset : -1L, RecordBatch.NO_TIMESTAMP, e);
-            if (callback != null) {
-                if (e == null)
-                    callback.onCompletion(metadata, null);
-                else
-                    callback.onCompletion(null, e);
-            }
+            if (e == null) future.complete(metadata);
+            else future.completeExceptionally(e);
             result.done();
         }
     }

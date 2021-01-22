@@ -1605,7 +1605,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     try {
       // the InitProducerId is sent asynchronously, so we expect the error either in the callback
       // or raised from send itself
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
+      producer.produce(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).toCompletableFuture.get()
       if (expectAuthException)
         fail("Should have raised ClusterAuthorizationException")
     } catch {
@@ -1615,7 +1615,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     try {
       // the second time, the call to send itself should fail (the producer becomes unusable
       // if no producerId can be obtained)
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
+      producer.produce(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).toCompletableFuture.get()
       if (expectAuthException)
         fail("Should have raised ClusterAuthorizationException")
     } catch {
@@ -1636,19 +1636,21 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val producer = buildIdempotentProducer()
 
     // first send should be fine since we have permission to get a ProducerId
-    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
+    producer.produce(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).toCompletableFuture.get()
 
     // revoke the IdempotentWrite permission
     removeAclIdempotenceRequired()
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
 
     // the send should now fail with a cluster auth error
-    var e = assertThrows(classOf[ExecutionException], () => producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get())
+    var e = assertThrows(classOf[ExecutionException], () => producer.produce(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+      .toCompletableFuture.get())
     assertTrue(e.getCause.isInstanceOf[TopicAuthorizationException])
 
     // the second time, the call to send itself should fail (the producer becomes unusable
     // if no producerId can be obtained)
-    e = assertThrows(classOf[ExecutionException], () => producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get())
+    e = assertThrows(classOf[ExecutionException], () => producer.produce(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+      .toCompletableFuture.get())
     assertTrue(e.getCause.isInstanceOf[TopicAuthorizationException])
   }
 
@@ -1670,7 +1672,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producer.initTransactions()
     producer.beginTransaction()
 
-    val future = producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes))
+    val future = producer.produce(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).toCompletableFuture
     val e = JTestUtils.assertFutureThrows(future, classOf[TopicAuthorizationException])
     assertEquals(Set(topic), e.unauthorizedTopics.asScala)
   }
@@ -1687,7 +1689,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producer.beginTransaction()
 
     assertThrows(classOf[TopicAuthorizationException], () => {
-      producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes))
+      producer.produce(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes))
       producer.commitTransaction()
     })
   }
@@ -1702,7 +1704,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     removeAllClientAcls()
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     producer.beginTransaction()
-    val future = producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes))
+    val future = producer.produce(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).toCompletableFuture
     JTestUtils.assertFutureThrows(future, classOf[TransactionalIdAuthorizationException])
   }
 
@@ -1715,7 +1717,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val producer = buildTransactionalProducer()
     producer.initTransactions()
     producer.beginTransaction()
-    producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).get
+    producer.produce(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).toCompletableFuture.get
     removeAllClientAcls()
     assertThrows(classOf[TransactionalIdAuthorizationException], () => producer.commitTransaction())
   }
@@ -1730,9 +1732,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val producer = buildTransactionalProducer()
     producer.initTransactions()
     producer.beginTransaction()
-    producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).get
+    producer.produce(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).toCompletableFuture.get
     // try and add a partition resulting in TopicAuthorizationException
-    val future = producer.send(new ProducerRecord("otherTopic", 0, "1".getBytes, "1".getBytes))
+    val future = producer.produce(new ProducerRecord("otherTopic", 0, "1".getBytes, "1".getBytes)).toCompletableFuture
     val e = JTestUtils.assertFutureThrows(future, classOf[TopicAuthorizationException])
     assertEquals(Set("otherTopic"), e.unauthorizedTopics.asScala)
     // now rollback
@@ -1760,7 +1762,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, IDEMPOTENT_WRITE, ALLOW)), clusterResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     val producer = buildIdempotentProducer()
-    producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).get
+    producer.produce(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).toCompletableFuture.get
   }
 
   // Verify that metadata request without topics works without any ACLs and returns cluster id
@@ -1940,7 +1942,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                           numRecords: Int,
                           tp: TopicPartition): Unit = {
     val futures = (0 until numRecords).map { i =>
-      producer.send(new ProducerRecord(tp.topic(), tp.partition(), i.toString.getBytes, i.toString.getBytes))
+      producer.produce(new ProducerRecord(tp.topic(), tp.partition(), i.toString.getBytes, i.toString.getBytes)).toCompletableFuture
     }
     try {
       futures.foreach(_.get)

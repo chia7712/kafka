@@ -81,7 +81,7 @@ class ProducerCompressionTest extends ZooKeeperTestHarness {
       // make sure the returned messages are correct
       val now = System.currentTimeMillis()
       val responses = for (message <- messageValues)
-        yield producer.send(new ProducerRecord(topic, null, now, null, message.getBytes))
+        yield producer.produce(new ProducerRecord(topic, null, now, null, message.getBytes)).toCompletableFuture
       for ((future, offset) <- responses.zipWithIndex) {
         assertEquals(offset.toLong, future.get.offset)
       }

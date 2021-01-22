@@ -105,7 +105,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       recordSize: Int, tp: TopicPartition) = {
     val bytes = new Array[Byte](recordSize)
     (0 until numRecords).map { i =>
-      producer.send(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, bytes))
+      producer.produce(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, bytes))
     }
     producer.flush()
   }
@@ -124,13 +124,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       trustStoreFile = trustStoreFile,
       saslProperties = Some(saslProps))
 
-    try {
-      producer.send(new ProducerRecord(tp.topic, tp.partition, "key".getBytes, "value".getBytes)).get
-    } catch {
-      case _: Exception => // expected exception
-    } finally {
-      producer.close()
-    }
+    try assertThrows(classOf[Exception], () => producer.produce(new ProducerRecord(tp.topic, tp.partition, "key".getBytes, "value".getBytes))
+      .toCompletableFuture.get)
+    finally producer.close()
   }
 
   private def verifyKafkaRateMetricsHaveCumulativeCount(producer: KafkaProducer[Array[Byte], Array[Byte]],

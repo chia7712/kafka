@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.utils.MockTime;
@@ -27,6 +27,7 @@ import org.apache.kafka.connect.runtime.TopicStatus;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.easymock.Capture;
+import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.easymock.Mock;
 import org.junit.Before;
@@ -37,6 +38,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.kafka.connect.json.JsonConverterConfig.SCHEMAS_ENABLE_CONFIG;
@@ -46,7 +48,6 @@ import static org.apache.kafka.connect.storage.KafkaStatusBackingStore.TOPIC_STA
 import static org.apache.kafka.connect.storage.KafkaStatusBackingStore.TOPIC_STATUS_SEPARATOR;
 import static org.easymock.EasyMock.capture;
 import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.newCapture;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -186,13 +187,11 @@ public class KafkaStatusBackingStoreFormatTest extends EasyMockSupport {
         TopicStatus topicStatus = new TopicStatus(FOO_TOPIC, new ConnectorTaskId(FOO_CONNECTOR, 0), time.milliseconds());
         String key = TOPIC_STATUS_PREFIX + FOO_TOPIC + TOPIC_STATUS_SEPARATOR + FOO_CONNECTOR;
         Capture<byte[]> valueCapture = newCapture();
-        Capture<Callback> callbackCapture = newCapture();
-        kafkaBasedLog.send(eq(key), capture(valueCapture), capture(callbackCapture));
-        expectLastCall()
-                .andAnswer(() -> {
-                    callbackCapture.getValue().onCompletion(null, null);
-                    return null;
-                });
+        EasyMock.expect(kafkaBasedLog.send(eq(key), capture(valueCapture))).andAnswer(() -> {
+            CompletableFuture<RecordMetadata> f = new CompletableFuture<>();
+            f.complete(null);
+            return f;
+        });
         replayAll();
 
         store.put(topicStatus);
@@ -214,17 +213,15 @@ public class KafkaStatusBackingStoreFormatTest extends EasyMockSupport {
         TopicStatus topicStatus = new TopicStatus(FOO_TOPIC, new ConnectorTaskId(FOO_CONNECTOR, 0), time.milliseconds());
         String key = TOPIC_STATUS_PREFIX + FOO_TOPIC + TOPIC_STATUS_SEPARATOR + FOO_CONNECTOR;
         Capture<byte[]> valueCapture = newCapture();
-        Capture<Callback> callbackCapture = newCapture();
-        kafkaBasedLog.send(eq(key), capture(valueCapture), capture(callbackCapture));
-        expectLastCall()
-                .andAnswer(() -> {
-                    callbackCapture.getValue().onCompletion(null, new TimeoutException());
-                    return null;
-                })
-                .andAnswer(() -> {
-                    callbackCapture.getValue().onCompletion(null, null);
-                    return null;
-                });
+        EasyMock.expect(kafkaBasedLog.send(eq(key), capture(valueCapture))).andAnswer(() -> {
+            CompletableFuture<RecordMetadata> f = new CompletableFuture<>();
+            f.completeExceptionally(new TimeoutException());
+            return f;
+        }).andAnswer(() -> {
+            CompletableFuture<RecordMetadata> f = new CompletableFuture<>();
+            f.complete(null);
+            return f;
+        });
 
         replayAll();
         store.put(topicStatus);
@@ -242,13 +239,11 @@ public class KafkaStatusBackingStoreFormatTest extends EasyMockSupport {
         TopicStatus topicStatus = new TopicStatus(FOO_TOPIC, new ConnectorTaskId(FOO_CONNECTOR, 0), time.milliseconds());
         String key = TOPIC_STATUS_PREFIX + FOO_TOPIC + TOPIC_STATUS_SEPARATOR + FOO_CONNECTOR;
         Capture<byte[]> valueCapture = newCapture();
-        Capture<Callback> callbackCapture = newCapture();
-        kafkaBasedLog.send(eq(key), capture(valueCapture), capture(callbackCapture));
-        expectLastCall()
-                .andAnswer(() -> {
-                    callbackCapture.getValue().onCompletion(null, new UnknownServerException());
-                    return null;
-                });
+        EasyMock.expect(kafkaBasedLog.send(eq(key), capture(valueCapture))).andAnswer(() -> {
+            CompletableFuture<RecordMetadata> f = new CompletableFuture<>();
+            f.completeExceptionally(new UnknownServerException());
+            return f;
+        });
 
         replayAll();
 
@@ -273,16 +268,14 @@ public class KafkaStatusBackingStoreFormatTest extends EasyMockSupport {
         String firstKey = TOPIC_STATUS_PREFIX + FOO_TOPIC + TOPIC_STATUS_SEPARATOR + FOO_CONNECTOR;
         String secondKey = TOPIC_STATUS_PREFIX + BAR_TOPIC + TOPIC_STATUS_SEPARATOR + FOO_CONNECTOR;
         Capture<byte[]> valueCapture = newCapture();
-        Capture<Callback> callbackCapture = newCapture();
-        kafkaBasedLog.send(eq(secondKey), capture(valueCapture), capture(callbackCapture));
-        expectLastCall()
-                .andAnswer(() -> {
-                    callbackCapture.getValue().onCompletion(null, null);
-                    // The second status record is read soon after it's persisted in the status topic
-                    ConsumerRecord<String, byte[]> statusRecord = new ConsumerRecord<>(STATUS_TOPIC, 0, 0, secondKey, valueCapture.getValue());
-                    store.read(statusRecord);
-                    return null;
-                });
+        EasyMock.expect(kafkaBasedLog.send(eq(secondKey), capture(valueCapture))).andAnswer(() -> {
+            CompletableFuture<RecordMetadata> f = new CompletableFuture<>();
+            f.complete(null);
+            // The second status record is read soon after it's persisted in the status topic
+            ConsumerRecord<String, byte[]> statusRecord = new ConsumerRecord<>(STATUS_TOPIC, 0, 0, secondKey, valueCapture.getValue());
+            store.read(statusRecord);
+            return f;
+        });
         replayAll();
 
         byte[] value = store.serializeTopicStatus(firstTopicStatus);

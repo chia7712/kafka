@@ -207,7 +207,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
 
   private def sendOneRecord(producer: KafkaProducer[Array[Byte], Array[Byte]], maxWaitMs: Long = 15000): Unit = {
     val record = new ProducerRecord(tp.topic(), tp.partition(), 0L, "key".getBytes, "value".getBytes)
-    val future = producer.send(record)
+    val future = producer.produce(record).toCompletableFuture
     producer.flush()
     try {
       val recordMetadata = future.get(maxWaitMs, TimeUnit.MILLISECONDS)

@@ -41,7 +41,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
     val producer = registerProducer(new KafkaProducer(producerProps))
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, "key".getBytes, "value".getBytes)
-    assertThrows(classOf[SerializationException], () => producer.send(record))
+    assertThrows(classOf[SerializationException], () => producer.produce(record))
   }
 
   @Test
@@ -79,7 +79,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     try {
       // Send a message to auto-create the topic
       val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
-      assertEquals(0L, producer.send(record).get.offset, "Should have offset 0")
+      assertEquals(0L, producer.produce(record).toCompletableFuture.get.offset, "Should have offset 0")
 
       // double check that the topic is created with leader elected
       TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
@@ -98,7 +98,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val producer = createProducer(brokerList = brokerList)
     try {
       val e = assertThrows(classOf[ExecutionException],
-        () => producer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()).getCause
+        () => producer.produce(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).toCompletableFuture.get()).getCause
       assertTrue(e.isInstanceOf[InvalidTimestampException])
       assertEquals("One or more records have been rejected due to invalid timestamp", e.getMessage)
     } finally {
@@ -109,7 +109,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val compressedProducer = createProducer(brokerList = brokerList, compressionType = "gzip")
     try {
       val e = assertThrows(classOf[ExecutionException],
-        () => compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()).getCause
+        () => compressedProducer.produce(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).toCompletableFuture.get()).getCause
       assertTrue(e.isInstanceOf[InvalidTimestampException])
       assertEquals("One or more records have been rejected due to invalid timestamp", e.getMessage)
     } finally {
@@ -124,7 +124,8 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   def testNonBlockingProducer(): Unit = {
 
     def send(producer: KafkaProducer[Array[Byte],Array[Byte]]): Future[RecordMetadata] = {
-      producer.send(new ProducerRecord(topic, 0, "key".getBytes, new Array[Byte](1000)))
+      producer.produce(new ProducerRecord(topic, 0, "key".getBytes, new Array[Byte](1000)))
+        .toCompletableFuture
     }
 
     def sendUntilQueued(producer: KafkaProducer[Array[Byte],Array[Byte]]): Future[RecordMetadata] = {
@@ -189,10 +190,10 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val valueSize = Defaults.MessageMaxBytes - overhead
 
     val record0 = new ProducerRecord(topic, new Array[Byte](0), new Array[Byte](valueSize))
-    assertEquals(record0.value.length, producer.send(record0).get.serializedValueSize)
+    assertEquals(record0.value.length, producer.produce(record0).toCompletableFuture.get.serializedValueSize)
 
     val record1 = new ProducerRecord(topic, new Array[Byte](0), new Array[Byte](valueSize + 1))
-    assertEquals(classOf[RecordTooLargeException], assertThrows(classOf[ExecutionException], () => producer.send(record1).get).getCause.getClass)
+    assertEquals(classOf[RecordTooLargeException], assertThrows(classOf[ExecutionException], () => producer.produce(record1).toCompletableFuture.get).getCause.getClass)
   }
 
 }

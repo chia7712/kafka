@@ -120,7 +120,7 @@ object EndToEndLatency {
       val begin = System.nanoTime
 
       //Send message (of random bytes) synchronously then immediately poll for it
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, message)).get()
+      producer.produce(new ProducerRecord[Array[Byte], Array[Byte]](topic, message)).toCompletableFuture.get()
       val recordIter = consumer.poll(Duration.ofMillis(timeout)).iterator
 
       val elapsed = System.nanoTime - begin

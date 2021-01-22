@@ -144,7 +144,7 @@ class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupComm
   private def produceRecord(): Unit = {
     val producer = createProducer()
     try {
-      producer.send(new ProducerRecord(topic, 0, null, null)).get()
+      producer.produce(new ProducerRecord(topic, 0, null, null)).toCompletableFuture.get()
     } finally {
       Utils.closeQuietly(producer, "producer")
     }

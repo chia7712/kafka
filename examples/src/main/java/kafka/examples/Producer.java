@@ -16,7 +16,6 @@
  */
 package kafka.examples;
 
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -27,6 +26,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.function.BiConsumer;
 
 public class Producer extends Thread {
     private final KafkaProducer<Integer, String> producer;
@@ -74,14 +74,15 @@ public class Producer extends Thread {
             String messageStr = "Message_" + messageKey;
             long startTime = System.currentTimeMillis();
             if (isAsync) { // Send asynchronously
-                producer.send(new ProducerRecord<>(topic,
+                DemoCallBack callBack = new DemoCallBack(startTime, messageKey, messageStr);
+                producer.produce(new ProducerRecord<>(topic,
                     messageKey,
-                    messageStr), new DemoCallBack(startTime, messageKey, messageStr));
+                    messageStr)).whenComplete(callBack);
             } else { // Send synchronously
                 try {
-                    producer.send(new ProducerRecord<>(topic,
+                    producer.produce(new ProducerRecord<>(topic,
                         messageKey,
-                        messageStr)).get();
+                        messageStr)).toCompletableFuture().get();
                     System.out.println("Sent message: (" + messageKey + ", " + messageStr + ")");
                 } catch (InterruptedException | ExecutionException e) {
                     e.printStackTrace();
@@ -95,7 +96,7 @@ public class Producer extends Thread {
     }
 }
 
-class DemoCallBack implements Callback {
+class DemoCallBack implements BiConsumer<RecordMetadata, Throwable> {
 
     private final long startTime;
     private final int key;
@@ -116,7 +117,8 @@ class DemoCallBack implements Callback {
      *                  with -1 value for all fields except for topicPartition will be returned if an error occurred.
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
      */
-    public void onCompletion(RecordMetadata metadata, Exception exception) {
+    @Override
+    public void accept(RecordMetadata metadata, Throwable exception) {
         long elapsedTime = System.currentTimeMillis() - startTime;
         if (metadata != null) {
             System.out.println(

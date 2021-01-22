@@ -30,7 +30,6 @@ import java.util.Random;
 import java.util.Arrays;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -40,6 +39,7 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.apache.kafka.common.KafkaFuture.BiConsumer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
@@ -139,8 +139,8 @@ public class ProducerPerformance {
                 record = new ProducerRecord<>(topicName, payload);
 
                 long sendStartMs = System.currentTimeMillis();
-                Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
-                producer.send(record, cb);
+                producer.produce(record)
+                    .whenComplete(stats.nextCompletion(sendStartMs, payload.length, stats)::accept);
 
                 currentTransactionSize++;
                 if (transactionsEnabled && transactionDurationMs <= (sendStartMs - transactionStartTime)) {
@@ -349,8 +349,8 @@ public class ProducerPerformance {
             }
         }
 
-        public Callback nextCompletion(long start, int bytes, Stats stats) {
-            Callback cb = new PerfCallback(this.iteration, start, bytes, stats);
+        public BiConsumer<RecordMetadata, Throwable> nextCompletion(long start, int bytes, Stats stats) {
+            BiConsumer<RecordMetadata, Throwable> cb = new PerfCallback(this.iteration, start, bytes, stats);
             this.iteration++;
             return cb;
         }
@@ -404,7 +404,7 @@ public class ProducerPerformance {
         }
     }
 
-    private static final class PerfCallback implements Callback {
+    private static final class PerfCallback implements BiConsumer<RecordMetadata, Throwable> {
         private final long start;
         private final int iteration;
         private final int bytes;
@@ -417,7 +417,8 @@ public class ProducerPerformance {
             this.bytes = bytes;
         }
 
-        public void onCompletion(RecordMetadata metadata, Exception exception) {
+        @Override
+        public void accept(RecordMetadata metadata, Throwable exception) {
             long now = System.currentTimeMillis();
             int latency = (int) (now - start);
             this.stats.record(iteration, latency, bytes, now);

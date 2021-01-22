@@ -206,8 +206,9 @@ abstract class QuotaTestClients(topic: String,
     var throttled = false
     do {
       val payload = numProduced.toString.getBytes
-      val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, null, null, payload),
-        new ErrorLoggingCallback(topic, null, null, true))
+      val future = producer.produce(new ProducerRecord[Array[Byte], Array[Byte]](topic, null, null, payload))
+        .toCompletableFuture
+        .whenComplete(new ErrorLoggingCallback(topic, null, null, true))
       numProduced += 1
       do {
         val metric = throttleMetric(QuotaType.Produce, producerClientId)

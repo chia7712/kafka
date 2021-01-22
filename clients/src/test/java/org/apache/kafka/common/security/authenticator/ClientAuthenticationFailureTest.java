@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -47,7 +46,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -106,8 +104,7 @@ public class ClientAuthenticationFailureTest {
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props, serializer, serializer)) {
             ProducerRecord<String, String> record = new ProducerRecord<>(topic, "message");
-            Future<RecordMetadata> future = producer.send(record);
-            TestUtils.assertFutureThrows(future, SaslAuthenticationException.class);
+            TestUtils.assertFutureThrows(producer.produce(record).toCompletableFuture(), SaslAuthenticationException.class);
         }
     }
 

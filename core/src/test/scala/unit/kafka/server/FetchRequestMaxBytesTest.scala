@@ -86,7 +86,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
     // Produce several messages as single batches.
     messages.indices.foreach(i => {
       val record = new ProducerRecord(testTopic, 0, oneByteArray(i.toByte), messages(i))
-      val future = producer.send(record)
+      val future = producer.produce(record).toCompletableFuture
       producer.flush()
       future.get()
     })

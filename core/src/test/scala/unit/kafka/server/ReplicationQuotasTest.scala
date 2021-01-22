@@ -117,7 +117,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     producer = createProducer(getBrokerListStrFromServers(brokers), acks = 1)
     (0 until msgCount).foreach { _ =>
       (0 to 7).foreach { partition =>
-        producer.send(new ProducerRecord(topic, partition, null, msg))
+        producer.produce(new ProducerRecord(topic, partition, null, msg))
       }
     }
 
@@ -211,7 +211,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
   def addData(msgCount: Int, msg: Array[Byte]): Unit = {
     producer = createProducer(getBrokerListStrFromServers(brokers), acks = 0)
-    (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
+    (0 until msgCount).map(_ => producer.produce(new ProducerRecord(topic, msg))).foreach(_.toCompletableFuture.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }
 

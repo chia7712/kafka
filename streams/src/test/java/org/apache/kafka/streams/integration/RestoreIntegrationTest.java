@@ -458,7 +458,7 @@ public class RestoreIntegrationTest {
 
             for (int i = 0; i < numberOfKeys; i++) {
                 final int offset = startingOffset + i;
-                producer.send(new ProducerRecord<>(changelogTopic, offset, offset));
+                producer.produce(new ProducerRecord<>(changelogTopic, offset, offset));
             }
         }
     }

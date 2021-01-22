@@ -108,7 +108,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     val records = (0 until numRecords).map { i =>
       val timestamp = startingTimestamp + i.toLong
       val record = new ProducerRecord(tp.topic(), tp.partition(), timestamp, s"key $i".getBytes, s"value $i".getBytes)
-      producer.send(record)
+      producer.produce(record)
       record
     }
     producer.flush()

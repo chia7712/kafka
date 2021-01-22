@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -45,7 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
@@ -203,11 +202,10 @@ public class StreamsProducer {
         }
     }
 
-    Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record,
-                                final Callback callback) {
+    CompletableFuture<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record) {
         maybeBeginTransaction();
         try {
-            return producer.send(record, callback);
+            return producer.produce(record).toCompletableFuture();
         } catch (final KafkaException uncaughtException) {
             if (isRecoverable(uncaughtException)) {
                 // producer.send() call may throw a KafkaException which wraps a FencedException,

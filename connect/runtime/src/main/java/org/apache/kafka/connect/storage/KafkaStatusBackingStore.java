@@ -274,15 +274,15 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
         final byte[] value = serializeTopicStatus(status);
 
-        kafkaLog.send(key, value, new org.apache.kafka.clients.producer.Callback() {
+        kafkaLog.send(key, value).whenComplete(new java.util.function.BiConsumer<RecordMetadata, Throwable>() {
             @Override
-            public void onCompletion(RecordMetadata metadata, Exception exception) {
-                if (exception == null) return;
+            public void accept(RecordMetadata recordMetadata, Throwable throwable) {
+                if (throwable == null) return;
                 // TODO: retry more gracefully and not forever
-                if (exception instanceof RetriableException) {
-                    kafkaLog.send(key, value, this);
+                if (throwable instanceof RetriableException) {
+                    kafkaLog.send(key, value).whenComplete(this);
                 } else {
-                    log.error("Failed to write status update", exception);
+                    log.error("Failed to write status update", throwable);
                 }
             }
         });
@@ -301,21 +301,18 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         }
 
         final byte[] value = status.state() == ConnectorStatus.State.DESTROYED ? null : serialize(status);
-
-        kafkaLog.send(key, value, new org.apache.kafka.clients.producer.Callback() {
+        kafkaLog.send(key, value).whenComplete(new java.util.function.BiConsumer<RecordMetadata, Throwable>() {
             @Override
-            public void onCompletion(RecordMetadata metadata, Exception exception) {
-                if (exception == null) return;
-                if (exception instanceof RetriableException) {
+            public void accept(RecordMetadata recordMetadata, Throwable throwable) {
+                if (throwable == null) return;
+                if (throwable instanceof RetriableException) {
                     synchronized (KafkaStatusBackingStore.this) {
-                        if (entry.isDeleted()
-                            || status.generation() != generation
-                            || (safeWrite && !entry.canWriteSafely(status, sequence)))
+                        if (entry.isDeleted() || status.generation() != generation || (safeWrite && !entry.canWriteSafely(status, sequence)))
                             return;
                     }
-                    kafkaLog.send(key, value, this);
+                    kafkaLog.send(key, value).whenComplete(this);
                 } else {
-                    log.error("Failed to write status update", exception);
+                    log.error("Failed to write status update", throwable);
                 }
             }
         });
