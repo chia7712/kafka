@@ -127,6 +127,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         // CompletableFuture#get() always wraps the _cause_ of a CompletionException in ExecutionException
         // (which KafkaFuture does not) so wrap CompletionException in an extra one to avoid losing the
         // first CompletionException in the exception chain.
+        System.out.println("[CHIA] newException: " + newException.getClass().getName());
         return completableFuture.kafkaCompleteExceptionally(
                 newException instanceof CompletionException ? new CompletionException(newException) : newException);
     }

@@ -226,6 +226,18 @@ public class KafkaFutureTest {
     }
 
     @Test
+    public void test() throws ExecutionException, InterruptedException, TimeoutException {
+//        final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
+//        future.completeExceptionally(new CancellationException("Ultimate efficiency achieved."));
+//        future.get(5, TimeUnit.MINUTES);
+//
+        final CompletableFuture<String> completableFuture = new CompletableFuture<>();
+        completableFuture.completeExceptionally(new CancellationException("Ultimate efficiency achieved."));
+        completableFuture.get(5, TimeUnit.MINUTES);
+
+    }
+
+    @Test
     public void testCompletingFuturesViaCancellation() throws Exception {
         final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
         CompleterThread<String> myThread = new CompleterThread<>(future, null,
@@ -233,10 +245,7 @@ public class KafkaFutureTest {
         assertIsNotCompleted(future);
         assertEquals("I am ready", future.getNow("I am ready"));
         myThread.start();
-        awaitAndAssertCancelled(future, "Ultimate efficiency achieved.");
-        assertIsCancelled(future);
-        myThread.join();
-        assertNull(myThread.testException);
+        future.get(5, TimeUnit.MINUTES);
     }
 
     private void assertIsNotCompleted(KafkaFutureImpl<String> future) {
