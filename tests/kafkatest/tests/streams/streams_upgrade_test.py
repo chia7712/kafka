@@ -499,7 +499,7 @@ class StreamsUpgradeTest(Test):
                             raise Exception("Kafka Streams failed with 'unable to decode subscription data: version=2'")
 
                         monitor.wait_until(self.processed_data_msg,
-                                           timeout_sec=60,
+                                           timeout_sec=30,
                                            err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node.account))
 
                         if extra_properties.get('test.run_fk_join', False):
